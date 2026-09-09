@@ -96,6 +96,14 @@ public class BusinessKnowledgeServiceImpl implements BusinessKnowledgeService {
 			throw new RuntimeException("Failed to add knowledge to database");
 		}
 
+		// 未召回的知识不参与向量化
+		if (entity.getIsRecall() == null || entity.getIsRecall() == 0) {
+			entity.setEmbeddingStatus(EmbeddingStatus.COMPLETED);
+			entity.setErrorMsg(null);
+			businessKnowledgeMapper.updateById(entity);
+			return businessKnowledgeConverter.toVo(entity);
+		}
+
 		try {
 			Document document = DocumentConverterUtil.convertBusinessKnowledgeToDocument(entity);
 			agentVectorStoreService.addDocuments(entity.getAgentId().toString(), List.of(document));
@@ -126,6 +134,9 @@ public class BusinessKnowledgeServiceImpl implements BusinessKnowledgeService {
 		knowledge.setDescription(knowledgeDTO.getDescription());
 		if (StringUtils.hasText(knowledgeDTO.getSynonyms()))
 			knowledge.setSynonyms(knowledgeDTO.getSynonyms());
+		if (knowledgeDTO.getIsRecall() != null) {
+			knowledge.setIsRecall(knowledgeDTO.getIsRecall() ? 1 : 0);
+		}
 
 		// 设置初始状态为处理中
 		knowledge.setEmbeddingStatus(EmbeddingStatus.PROCESSING);
@@ -133,6 +144,14 @@ public class BusinessKnowledgeServiceImpl implements BusinessKnowledgeService {
 		// 先更新数据库
 		if (businessKnowledgeMapper.updateById(knowledge) <= 0) {
 			throw new RuntimeException("Failed to update knowledge in database");
+		}
+
+		// 未召回的知识不参与向量化
+		if (knowledge.getIsRecall() == null || knowledge.getIsRecall() == 0) {
+			knowledge.setEmbeddingStatus(EmbeddingStatus.COMPLETED);
+			knowledge.setErrorMsg(null);
+			businessKnowledgeMapper.updateById(knowledge);
+			return businessKnowledgeConverter.toVo(knowledge);
 		}
 
 		// 尝试更新向量库
@@ -208,6 +227,23 @@ public class BusinessKnowledgeServiceImpl implements BusinessKnowledgeService {
 		knowledge.setIsRecall(isRecall ? 1 : 0);
 		businessKnowledgeMapper.updateById(knowledge);
 
+		// 从 未召回 -> 召回 时，需要确保向量存在（未召回的知识在创建/更新时跳过了向量化）
+		if (isRecall) {
+			try {
+				syncToVectorStore(knowledge);
+				knowledge.setEmbeddingStatus(EmbeddingStatus.COMPLETED);
+				knowledge.setErrorMsg(null);
+				businessKnowledgeMapper.updateById(knowledge);
+			}
+			catch (Exception e) {
+				knowledge.setEmbeddingStatus(EmbeddingStatus.FAILED);
+				knowledge.setErrorMsg(
+						e.getMessage().length() > 200 ? e.getMessage().substring(0, 200) : e.getMessage());
+				businessKnowledgeMapper.updateById(knowledge);
+				log.error("Failed to vectorize knowledge on recall, id: {}, error: {}", id, e.getMessage());
+			}
+		}
+
 	}
 
 	@Override
@@ -254,7 +290,7 @@ public class BusinessKnowledgeServiceImpl implements BusinessKnowledgeService {
 
 		// 非召回的不处理
 		if (knowledge.getIsRecall() == null || knowledge.getIsRecall() == 0) {
-			throw new RuntimeException("BusinessKnowledge is not recalled, please recall it first.");
+			throw new RuntimeException("该业务知识未设为召回，请先设为召回后再重试");
 		}
 
 		try {

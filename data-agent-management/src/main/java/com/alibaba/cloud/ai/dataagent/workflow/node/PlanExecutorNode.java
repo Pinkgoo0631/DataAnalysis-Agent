@@ -21,14 +21,13 @@ import com.alibaba.cloud.ai.graph.action.NodeAction;
 import com.alibaba.cloud.ai.dataagent.dto.planner.ExecutionStep;
 import com.alibaba.cloud.ai.dataagent.dto.planner.Plan;
 import com.alibaba.cloud.ai.dataagent.util.PlanProcessUtil;
+import com.alibaba.cloud.ai.dataagent.util.PlanValidator;
 import com.alibaba.cloud.ai.dataagent.util.StateUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import static com.alibaba.cloud.ai.dataagent.constant.Constant.*;
 
@@ -41,10 +40,6 @@ import static com.alibaba.cloud.ai.dataagent.constant.Constant.*;
 @Slf4j
 @Component
 public class PlanExecutorNode implements NodeAction {
-
-	// Supported node types
-	private static final Set<String> SUPPORTED_NODES = Set.of(SQL_GENERATE_NODE, PYTHON_GENERATE_NODE,
-			REPORT_GENERATOR_NODE);
 
 	@Override
 	public Map<String, Object> apply(OverAllState state) throws Exception {
@@ -60,18 +55,11 @@ public class PlanExecutorNode implements NodeAction {
 					"Validation failed: The plan is not a valid JSON structure. Error: " + e.getMessage());
 		}
 
-		// Validate execution plan structure
-		if (!validateExecutionPlanStructure(plan)) {
-			return buildValidationResult(state, false,
-					"Validation failed: The generated plan is empty or has no execution steps.");
-		}
-
-		// Validate each execution step
-		for (ExecutionStep step : plan.getExecutionPlan()) {
-			String validationResult = validateExecutionStep(step);
-			if (validationResult != null) {
-				return buildValidationResult(state, false, validationResult);
-			}
+		// Validate the plan structure and each execution step using the shared validator
+		String validationError = PlanValidator.validate(plan);
+		if (validationError != null) {
+			log.warn("Plan validation failed: {}", validationError);
+			return buildValidationResult(state, false, validationError);
 		}
 
 		log.info("Plan validation successful.");
@@ -105,7 +93,7 @@ public class PlanExecutorNode implements NodeAction {
 	 * Determine the next node to execute
 	 */
 	private Map<String, Object> determineNextNode(String toolToUse) {
-		if (SUPPORTED_NODES.contains(toolToUse)) {
+		if (PlanValidator.SUPPORTED_NODES.contains(toolToUse)) {
 			log.info("Determined next execution node: {}", toolToUse);
 			return Map.of(PLAN_NEXT_NODE, toolToUse, PLAN_VALIDATION_STATUS, true);
 		}
@@ -118,58 +106,6 @@ public class PlanExecutorNode implements NodeAction {
 			// before.
 			return Map.of(PLAN_VALIDATION_STATUS, false, PLAN_VALIDATION_ERROR, "Unsupported node type: " + toolToUse);
 		}
-	}
-
-	/**
-	 * Validate the execution plan structure
-	 */
-	private boolean validateExecutionPlanStructure(Plan plan) {
-		return plan != null && plan.getExecutionPlan() != null && !plan.getExecutionPlan().isEmpty();
-	}
-
-	/**
-	 * Validate a single execution step
-	 * @return error message if validation fails, null if validation passes
-	 */
-	private String validateExecutionStep(ExecutionStep step) {
-		// Validate tool name
-		if (step.getToolToUse() == null || !SUPPORTED_NODES.contains(step.getToolToUse())) {
-			return "Validation failed: Plan contains an invalid tool name: '" + step.getToolToUse() + "' in step "
-					+ step.getStep();
-		}
-
-		// Validate tool parameters
-		if (step.getToolParameters() == null) {
-			return "Validation failed: Tool parameters are missing for step " + step.getStep();
-		}
-
-		// Validate specific parameters based on node type
-		switch (step.getToolToUse()) {
-			case SQL_GENERATE_NODE:
-				if (!StringUtils.hasText(step.getToolParameters().getInstruction())) {
-					return "Validation failed: SQL generation node is missing description in step " + step.getStep();
-				}
-				break;
-
-			case PYTHON_GENERATE_NODE:
-				if (!StringUtils.hasText(step.getToolParameters().getInstruction())) {
-					return "Validation failed: Python generation node is missing instruction in step " + step.getStep();
-				}
-				break;
-
-			case REPORT_GENERATOR_NODE:
-				if (!StringUtils.hasText(step.getToolParameters().getSummaryAndRecommendations())) {
-					return "Validation failed: Report generation node is missing summary_and_recommendations in step "
-							+ step.getStep();
-				}
-				break;
-
-			default:
-				// This should not happen due to the earlier validation
-				break;
-		}
-
-		return null; // Validation passed
 	}
 
 	private Map<String, Object> buildValidationResult(OverAllState state, boolean isValid, String errorMessage) {

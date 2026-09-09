@@ -270,7 +270,7 @@ public class DataAgentProperties {
 		/**
 		 * 查询时返回的最大文档数量
 		 */
-		private int defaultTopkLimit = 8;
+		private int defaultTopkLimit = 5;
 
 		/**
 		 * 一次删除操作中，最多删除的文档数量

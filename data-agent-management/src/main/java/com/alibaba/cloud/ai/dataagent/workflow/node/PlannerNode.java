@@ -27,6 +27,7 @@ import com.alibaba.cloud.ai.dataagent.prompt.PromptHelper;
 import com.alibaba.cloud.ai.dataagent.service.llm.LlmService;
 import com.alibaba.cloud.ai.dataagent.util.ChatResponseUtil;
 import com.alibaba.cloud.ai.dataagent.util.FluxUtil;
+import com.alibaba.cloud.ai.dataagent.util.PlanValidator;
 import com.alibaba.cloud.ai.dataagent.util.StateUtil;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -52,7 +53,8 @@ public class PlannerNode implements NodeAction {
 	@Override
 	public Map<String, Object> apply(OverAllState state) throws Exception {
 		// 是否为NL2SQL模式
-		Boolean onlyNl2sql = state.value(IS_ONLY_NL2SQL, false);
+		boolean onlyNl2sql = state.value(IS_ONLY_NL2SQL, false);
+		String canonicalQuery = StateUtil.getCanonicalQuery(state);
 
 		Flux<ChatResponse> flux = onlyNl2sql ? handleNl2SqlOnly(state) : handlePlanGenerate(state);
 
@@ -60,11 +62,50 @@ public class PlannerNode implements NodeAction {
 				Flux.just(ChatResponseUtil.createPureResponse(TextType.JSON.getStartSign())), flux,
 				Flux.just(ChatResponseUtil.createPureResponse(TextType.JSON.getEndSign())));
 		Flux<GraphResponse<StreamingOutput>> generator = FluxUtil.createStreamingGeneratorWithMessages(this.getClass(),
-				state, v -> Map.of(PLANNER_NODE_OUTPUT, v.substring(TextType.JSON.getStartSign().length(),
-						v.length() - TextType.JSON.getEndSign().length())),
-				chatResponseFlux);
+				state, v -> buildPlannerOutput(v, onlyNl2sql, canonicalQuery), chatResponseFlux);
 
 		return Map.of(PLANNER_NODE_OUTPUT, generator);
+	}
+
+	/**
+	 * 从流式收集到的完整文本中截取计划 JSON，并按模式决定是否做兜底。 NL2SQL 模式的计划由代码
+	 * 生成、必定合法；完整分析模式的计划来自 LLM，需要解析与校验。
+	 */
+	private Map<String, Object> buildPlannerOutput(String v, boolean onlyNl2sql, String canonicalQuery) {
+		String raw = extractRawPlan(v);
+		String planJson = onlyNl2sql ? raw : safePlan(raw, canonicalQuery);
+		return Map.of(PLANNER_NODE_OUTPUT, planJson);
+	}
+
+	private String extractRawPlan(String v) {
+		if (v == null) {
+			return "";
+		}
+		int start = TextType.JSON.getStartSign().length();
+		int end = v.length() - TextType.JSON.getEndSign().length();
+		if (end < start) {
+			return "";
+		}
+		return v.substring(start, end);
+	}
+
+	/**
+	 * 解析并校验 LLM 生成的计划；解析失败或校验不通过时回退到兜底计划， 保证
+	 * PLANNER_NODE_OUTPUT 始终是可用的执行计划，避免修复超限后静默结束。
+	 */
+	private String safePlan(String raw, String canonicalQuery) {
+		try {
+			Plan plan = new BeanOutputConverter<>(Plan.class).convert(raw);
+			String validationError = PlanValidator.validate(plan);
+			if (validationError == null) {
+				return raw;
+			}
+			log.warn("Planner output failed validation, using fallback plan. Reason: {}", validationError);
+		}
+		catch (Exception e) {
+			log.warn("Planner output could not be parsed, using fallback plan.", e);
+		}
+		return Plan.fallbackPlan(canonicalQuery);
 	}
 
 	private Flux<ChatResponse> handlePlanGenerate(OverAllState state) {

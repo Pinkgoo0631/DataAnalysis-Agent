@@ -44,6 +44,37 @@ public class Plan {
 		return "Plan{" + "thoughtProcess='" + thoughtProcess + '\'' + ", executionPlan=" + executionPlan + '}';
 	}
 
+	/**
+	 * 自动生成计划未通过校验时使用的兜底计划：直接执行一次 SQL 查询并生成报告，
+	 * 保证流程始终有可输出内容，避免静默结束。
+	 */
+	public static String fallbackPlan(String canonicalQuery) {
+		String instruction = (canonicalQuery == null || canonicalQuery.isBlank()) ? "查询并分析数据" : canonicalQuery;
+		ExecutionStep sqlStep = new ExecutionStep();
+		ExecutionStep.ToolParameters sqlParameters = new ExecutionStep.ToolParameters();
+		sqlParameters.setInstruction(instruction);
+		sqlStep.setStep(1);
+		sqlStep.setToolToUse(Constant.SQL_GENERATE_NODE);
+		sqlStep.setToolParameters(sqlParameters);
+
+		ExecutionStep reportStep = new ExecutionStep();
+		ExecutionStep.ToolParameters reportParameters = new ExecutionStep.ToolParameters();
+		reportParameters.setSummaryAndRecommendations(
+				"仅根据步骤1的SQL查询真实结果总结分析结论；若结果为空，如实说明未查询到数据，不臆测原因。");
+		reportStep.setStep(2);
+		reportStep.setToolToUse(Constant.REPORT_GENERATOR_NODE);
+		reportStep.setToolParameters(reportParameters);
+
+		Plan plan = new Plan("自动生成计划未通过校验，退化为直接SQL查询并输出报告，以保证结果可用。",
+				List.of(sqlStep, reportStep));
+		try {
+			return JsonUtil.getObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(plan);
+		}
+		catch (JsonProcessingException e) {
+			throw new IllegalStateException("Failed to serialize fallback plan", e);
+		}
+	}
+
 	// 为NL2SQL模式准备的Plan，只走SQL生成，并将实际问题作为步骤指令传给下游。
 	public static String nl2SqlPlan(String instruction) {
 		if (instruction == null || instruction.isBlank()) {

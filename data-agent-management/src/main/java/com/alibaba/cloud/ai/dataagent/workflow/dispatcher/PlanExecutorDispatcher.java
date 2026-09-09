@@ -51,15 +51,19 @@ public class PlanExecutorDispatcher implements EdgeAction {
 			// Plan validation failed, check repair count and decide whether to retry or
 			// end.
 			int repairCount = StateUtil.getObjectValue(state, PLAN_REPAIR_COUNT, Integer.class, 0);
+			String validationError = StateUtil.getStringValue(state, PLAN_VALIDATION_ERROR, null);
 
 			if (repairCount > MAX_REPAIR_ATTEMPTS) {
-				log.error("Plan repair attempts exceeded the limit of {}. Terminating execution.", MAX_REPAIR_ATTEMPTS);
+				log.error(
+						"Plan repair attempts exceeded the limit of {}. Terminating execution. Last validation error: {}",
+						MAX_REPAIR_ATTEMPTS, validationError);
 				// The node is responsible for setting the final error message.
 				return END;
 			}
 
-			log.warn("Plan validation failed. Routing back to PlannerNode for repair. Attempt count from state: {}.",
-					repairCount);
+			log.warn(
+					"Plan validation failed. Routing back to PlannerNode for repair. Attempt count from state: {}. Validation error: {}",
+					repairCount, validationError);
 			return PLANNER_NODE;
 		}
 	}

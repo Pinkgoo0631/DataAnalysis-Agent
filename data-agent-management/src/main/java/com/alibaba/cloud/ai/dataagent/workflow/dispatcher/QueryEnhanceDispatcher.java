@@ -33,9 +33,9 @@ public class QueryEnhanceDispatcher implements EdgeAction {
 
 	@Override
 	public String apply(OverAllState state) throws Exception {
-		// 获取查询处理结果
+		// 获取查询处理结果；键缺失时返回 null 而非抛异常，交给下方优雅结束
 		QueryEnhanceOutputDTO queryProcessOutput = StateUtil.getObjectValue(state, QUERY_ENHANCE_NODE_OUTPUT,
-				QueryEnhanceOutputDTO.class);
+				QueryEnhanceOutputDTO.class, (QueryEnhanceOutputDTO) null);
 
 		// 检查查询处理结果是否为空
 		if (queryProcessOutput == null) {

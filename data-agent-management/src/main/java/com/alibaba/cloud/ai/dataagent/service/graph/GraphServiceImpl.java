@@ -334,6 +334,14 @@ public class GraphServiceImpl implements GraphService {
 							.builder(GraphNodeResponse.finalAnswer(agentId, threadId, context.getFinalAnswer()))
 							.build());
 				}
+				else if (!StringUtils.hasText(context.getCollectedOutput())) {
+					// 兜底：既没有最终答案也没有任何流式输出时，推送可读提示，避免前端白屏
+					String fallbackMessage = "未能生成有效分析结果。请确认该 Agent 已选择包含目标数据表的数据源，并重新执行「初始化数据源」后重试。";
+					context.getSink()
+						.tryEmitNext(ServerSentEvent
+							.builder(GraphNodeResponse.finalAnswer(agentId, threadId, fallbackMessage))
+							.build());
+				}
 				context.getSink()
 					.tryEmitNext(ServerSentEvent.builder(GraphNodeResponse.complete(agentId, threadId))
 						.event(STREAM_EVENT_COMPLETE)
