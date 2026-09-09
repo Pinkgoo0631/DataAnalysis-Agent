@@ -36,11 +36,10 @@ jobs:
     name: Rebuild and restart stack
     runs-on: [self-hosted, linux, x64, dataagent-server]
     timeout-minutes: 90
-    env:
-      SRC: "${{ runner.temp }}/data-agent-src"
     steps:
       - name: Clone latest main (shallow)
         run: |
+          SRC="$RUNNER_TEMP/data-agent-src"
           rm -rf "$SRC"
           git clone --depth 1 --branch main \
             https://github.com/Pinkgoo0631/DataAnalysis-Agent.git "$SRC"
@@ -56,6 +55,7 @@ jobs:
         env:
           AI_DASHSCOPE_API_KEY: ${{ secrets.AI_DASHSCOPE_API_KEY }}
         run: |
+          SRC="$RUNNER_TEMP/data-agent-src"
           docker compose -f "$SRC/docker-file/docker-compose.yml" \
             up -d --build --remove-orphans
 
