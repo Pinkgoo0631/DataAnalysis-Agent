@@ -25,6 +25,14 @@ on:
   push:
     branches:
       - main
+    # 仅当部署相关路径变更时才自动发布；纯文档/CI/图片改动不触发重建。
+    paths:
+      - 'data-agent-management/**'
+      - 'data-agent-frontend-nuxt/**'
+      - 'docker-file/**'
+      - '.github/workflows/deploy.yml'
+      - 'pom.xml'
+      - 'mvnw'
   workflow_dispatch:
 
 concurrency:
