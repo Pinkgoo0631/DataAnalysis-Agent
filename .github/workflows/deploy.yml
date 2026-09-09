@@ -15,6 +15,8 @@
 #
 # 自托管部署流水线（fork 专用）：
 # 推送到 main 后，在注册于本服务器的自托管 runner 上重新构建并启动容器栈。
+# 不用 actions/checkout：仓库为 public，直接 git clone 更省（避免 codeload 慢）；
+# runner 容器以 host 网络运行，故 127.0.0.1:3000/8065 即宿主上的应用端口。
 # 注意：data_agent 业务库在外部 mysql0631 容器中，compose 内已设 SQL_INIT=never，
 #       本流水线只做 build + up，绝不初始化/删改业务库。
 name: Deploy to Server
@@ -34,26 +36,28 @@ jobs:
     name: Rebuild and restart stack
     runs-on: [self-hosted, linux, x64, dataagent-server]
     timeout-minutes: 90
+    env:
+      SRC: "${{ runner.temp }}/data-agent-src"
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Clone latest main (shallow)
+        run: |
+          rm -rf "$SRC"
+          git clone --depth 1 --branch main \
+            https://github.com/Pinkgoo0631/DataAnalysis-Agent.git "$SRC"
+          git -C "$SRC" log -1 --format='deploying %h (%s)'
 
-      - name: Ensure app network exists
+      - name: Ensure app network and attach mysql0631
         run: |
           docker network inspect data-agent-network >/dev/null 2>&1 \
             || docker network create data-agent-network
-
-      - name: Connect shared mysql0631 to app network (idempotent)
-        run: docker network connect data-agent-network mysql0631 2>/dev/null || true
-
-      - name: Show commit under deploy
-        run: git log -1 --format='deploying %h %s by %an'
+          docker network connect data-agent-network mysql0631 2>/dev/null || true
 
       - name: Build and restart backend + frontend
         env:
           AI_DASHSCOPE_API_KEY: ${{ secrets.AI_DASHSCOPE_API_KEY }}
         run: |
-          docker compose -f docker-file/docker-compose.yml up -d --build --remove-orphans
+          docker compose -f "$SRC/docker-file/docker-compose.yml" \
+            up -d --build --remove-orphans
 
       - name: Wait for backend health
         run: |
