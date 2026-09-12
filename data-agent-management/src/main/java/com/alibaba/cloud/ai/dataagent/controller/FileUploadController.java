@@ -17,6 +17,7 @@ package com.alibaba.cloud.ai.dataagent.controller;
 
 import com.alibaba.cloud.ai.dataagent.properties.FileStorageProperties;
 import com.alibaba.cloud.ai.dataagent.service.file.FileStorageService;
+import com.alibaba.cloud.ai.dataagent.service.auth.ResourceOwnershipService;
 import com.alibaba.cloud.ai.dataagent.vo.UploadResponse;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import java.io.IOException;
@@ -26,13 +27,13 @@ import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.http.codec.multipart.FilePart;
+import org.springframework.security.core.Authentication;
 import reactor.core.publisher.Mono;
 
 /**
@@ -44,7 +45,6 @@ import reactor.core.publisher.Mono;
 @Slf4j
 @RestController
 @RequestMapping("/api/upload")
-@CrossOrigin(origins = "*")
 @AllArgsConstructor
 public class FileUploadController {
 
@@ -52,11 +52,14 @@ public class FileUploadController {
 
 	private final FileStorageService fileStorageService;
 
+	private final ResourceOwnershipService ownershipService;
+
 	/**
 	 * 上传头像图片
 	 */
 	@PostMapping(value = "/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-	public Mono<ResponseEntity<UploadResponse>> uploadAvatar(@RequestPart("file") FilePart file) {
+	public Mono<ResponseEntity<UploadResponse>> uploadAvatar(@RequestPart("file") FilePart file,
+			Authentication authentication) {
 		// 验证文件类型
 		String contentType = file.headers().getContentType() != null ? file.headers().getContentType().toString()
 				: null;
@@ -69,7 +72,8 @@ public class FileUploadController {
 		}
 
 		// 使用文件存储服务存储文件
-		return fileStorageService.storeFile(file, "avatars").map(filePath -> {
+		String userPath = "users/" + ownershipService.userId(authentication) + "/avatars";
+		return fileStorageService.storeFile(file, userPath).map(filePath -> {
 			String fileUrl = fileStorageService.getFileUrl(filePath);
 			// 提取文件名
 			String filename = filePath.substring(filePath.lastIndexOf("/") + 1);

@@ -19,6 +19,8 @@ import com.alibaba.cloud.ai.dataagent.dto.ModelConfigDTO;
 import com.alibaba.cloud.ai.dataagent.enums.ModelType;
 import com.alibaba.cloud.ai.dataagent.service.aimodelconfig.ModelConfigDataService;
 import com.alibaba.cloud.ai.dataagent.service.aimodelconfig.ModelConfigOpsService;
+import com.alibaba.cloud.ai.dataagent.service.auth.ResourceOwnershipService;
+import com.alibaba.cloud.ai.dataagent.support.AuthenticationTestSupport;
 import com.alibaba.cloud.ai.dataagent.vo.ApiResponse;
 import com.alibaba.cloud.ai.dataagent.vo.ModelCheckVo;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.core.Authentication;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -40,11 +43,17 @@ class ModelConfigControllerTest {
 	@Mock
 	private ModelConfigOpsService modelConfigOpsService;
 
+	@Mock
+	private ResourceOwnershipService ownershipService;
+
 	private ModelConfigController modelConfigController;
+
+	private final Authentication authentication = AuthenticationTestSupport.user();
 
 	@BeforeEach
 	void setUp() {
-		modelConfigController = new ModelConfigController(modelConfigDataService, modelConfigOpsService);
+		modelConfigController = new ModelConfigController(modelConfigDataService, modelConfigOpsService, ownershipService);
+		when(ownershipService.userId(authentication)).thenReturn(1L);
 	}
 
 	@Test
@@ -55,29 +64,29 @@ class ModelConfigControllerTest {
 			.modelName("gpt-4")
 			.modelType("CHAT")
 			.build();
-		doNothing().when(modelConfigDataService).addConfig(any(ModelConfigDTO.class));
+		doNothing().when(modelConfigDataService).addConfig(any(ModelConfigDTO.class), eq(1L));
 
-		ApiResponse<String> result = modelConfigController.add(config);
+		ApiResponse<String> result = modelConfigController.add(config, authentication);
 
 		assertTrue(result.isSuccess());
-		verify(modelConfigDataService).addConfig(any(ModelConfigDTO.class));
+		verify(modelConfigDataService).addConfig(any(ModelConfigDTO.class), eq(1L));
 	}
 
 	@Test
 	void activateModel_validId_activatesModel() {
-		doNothing().when(modelConfigOpsService).activateConfig(1);
+		doNothing().when(modelConfigOpsService).activateConfig(1, 1L);
 
-		ApiResponse<String> result = modelConfigController.activate(1);
+		ApiResponse<String> result = modelConfigController.activate(1, authentication);
 
 		assertTrue(result.isSuccess());
-		verify(modelConfigOpsService).activateConfig(1);
+		verify(modelConfigOpsService).activateConfig(1, 1L);
 	}
 
 	@Test
 	void activateModel_failure_returnsError() {
-		doThrow(new RuntimeException("config not found")).when(modelConfigOpsService).activateConfig(999);
+		doThrow(new RuntimeException("config not found")).when(modelConfigOpsService).activateConfig(999, 1L);
 
-		ApiResponse<String> result = modelConfigController.activate(999);
+		ApiResponse<String> result = modelConfigController.activate(999, authentication);
 
 		assertFalse(result.isSuccess());
 		assertTrue(result.getMessage().contains("config not found"));
@@ -85,22 +94,22 @@ class ModelConfigControllerTest {
 
 	@Test
 	void testConnection_validId_returnsSuccess() {
-		doNothing().when(modelConfigOpsService).testConnection(1);
+		doNothing().when(modelConfigOpsService).testConnection(1, 1L);
 
-		ApiResponse<String> result = modelConfigController.testConnection(1);
+		ApiResponse<String> result = modelConfigController.testConnection(1, authentication);
 
 		assertTrue(result.isSuccess());
-		verify(modelConfigOpsService).testConnection(1);
+		verify(modelConfigOpsService).testConnection(1, 1L);
 	}
 
 	@Test
 	void checkReady_allConfigured_returnsReady() {
 		ModelConfigDTO chatConfig = ModelConfigDTO.builder().modelType("CHAT").isActive(true).build();
 		ModelConfigDTO embeddingConfig = ModelConfigDTO.builder().modelType("EMBEDDING").isActive(true).build();
-		when(modelConfigDataService.getActiveConfigByType(ModelType.CHAT)).thenReturn(chatConfig);
-		when(modelConfigDataService.getActiveConfigByType(ModelType.EMBEDDING)).thenReturn(embeddingConfig);
+		when(modelConfigDataService.getActiveConfigByType(ModelType.CHAT, 1L)).thenReturn(chatConfig);
+		when(modelConfigDataService.getActiveConfigByType(ModelType.EMBEDDING, 1L)).thenReturn(embeddingConfig);
 
-		ApiResponse<ModelCheckVo> result = modelConfigController.checkReady();
+		ApiResponse<ModelCheckVo> result = modelConfigController.checkReady(authentication);
 
 		assertTrue(result.isSuccess());
 		assertTrue(result.getData().isReady());
@@ -111,10 +120,10 @@ class ModelConfigControllerTest {
 	@Test
 	void checkReady_missingEmbedding_returnsNotReady() {
 		ModelConfigDTO chatConfig = ModelConfigDTO.builder().modelType("CHAT").isActive(true).build();
-		when(modelConfigDataService.getActiveConfigByType(ModelType.CHAT)).thenReturn(chatConfig);
-		when(modelConfigDataService.getActiveConfigByType(ModelType.EMBEDDING)).thenReturn(null);
+		when(modelConfigDataService.getActiveConfigByType(ModelType.CHAT, 1L)).thenReturn(chatConfig);
+		when(modelConfigDataService.getActiveConfigByType(ModelType.EMBEDDING, 1L)).thenReturn(null);
 
-		ApiResponse<ModelCheckVo> result = modelConfigController.checkReady();
+		ApiResponse<ModelCheckVo> result = modelConfigController.checkReady(authentication);
 
 		assertTrue(result.isSuccess());
 		assertFalse(result.getData().isReady());

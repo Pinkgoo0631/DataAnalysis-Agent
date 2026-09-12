@@ -18,6 +18,8 @@ package com.alibaba.cloud.ai.dataagent.controller;
 import com.alibaba.cloud.ai.dataagent.dto.knowledge.businessknowledge.CreateBusinessKnowledgeDTO;
 import com.alibaba.cloud.ai.dataagent.dto.knowledge.businessknowledge.UpdateBusinessKnowledgeDTO;
 import com.alibaba.cloud.ai.dataagent.service.business.BusinessKnowledgeService;
+import com.alibaba.cloud.ai.dataagent.service.auth.ResourceOwnershipService;
+import com.alibaba.cloud.ai.dataagent.support.AuthenticationTestSupport;
 import com.alibaba.cloud.ai.dataagent.vo.ApiResponse;
 import com.alibaba.cloud.ai.dataagent.vo.BusinessKnowledgeVO;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.core.Authentication;
 
 import java.util.List;
 
@@ -38,11 +41,16 @@ class BusinessKnowledgeControllerTest {
 	@Mock
 	private BusinessKnowledgeService businessKnowledgeService;
 
+	@Mock
+	private ResourceOwnershipService ownershipService;
+
 	private BusinessKnowledgeController controller;
+
+	private final Authentication authentication = AuthenticationTestSupport.user();
 
 	@BeforeEach
 	void setUp() {
-		controller = new BusinessKnowledgeController(businessKnowledgeService);
+		controller = new BusinessKnowledgeController(businessKnowledgeService, ownershipService);
 	}
 
 	@Test
@@ -50,7 +58,7 @@ class BusinessKnowledgeControllerTest {
 		BusinessKnowledgeVO vo = BusinessKnowledgeVO.builder().id(1L).businessTerm("Revenue").build();
 		when(businessKnowledgeService.getKnowledge(1L)).thenReturn(List.of(vo));
 
-		ApiResponse<List<BusinessKnowledgeVO>> result = controller.list("1", null);
+		ApiResponse<List<BusinessKnowledgeVO>> result = controller.list("1", null, authentication);
 
 		assertTrue(result.isSuccess());
 		assertEquals(1, result.getData().size());
@@ -62,7 +70,7 @@ class BusinessKnowledgeControllerTest {
 		BusinessKnowledgeVO vo = BusinessKnowledgeVO.builder().id(1L).businessTerm("Revenue").build();
 		when(businessKnowledgeService.searchKnowledge(1L, "Rev")).thenReturn(List.of(vo));
 
-		ApiResponse<List<BusinessKnowledgeVO>> result = controller.list("1", "Rev");
+		ApiResponse<List<BusinessKnowledgeVO>> result = controller.list("1", "Rev", authentication);
 
 		assertTrue(result.isSuccess());
 		assertEquals(1, result.getData().size());
@@ -74,7 +82,7 @@ class BusinessKnowledgeControllerTest {
 		BusinessKnowledgeVO vo = BusinessKnowledgeVO.builder().id(1L).businessTerm("Revenue").build();
 		when(businessKnowledgeService.getKnowledgeById(1L)).thenReturn(vo);
 
-		ApiResponse<BusinessKnowledgeVO> result = controller.get(1L);
+		ApiResponse<BusinessKnowledgeVO> result = controller.get(1L, authentication);
 
 		assertTrue(result.isSuccess());
 		assertEquals("Revenue", result.getData().getBusinessTerm());
@@ -84,7 +92,7 @@ class BusinessKnowledgeControllerTest {
 	void get_notFound_returnsError() {
 		when(businessKnowledgeService.getKnowledgeById(999L)).thenReturn(null);
 
-		ApiResponse<BusinessKnowledgeVO> result = controller.get(999L);
+		ApiResponse<BusinessKnowledgeVO> result = controller.get(999L, authentication);
 
 		assertFalse(result.isSuccess());
 	}
@@ -99,7 +107,7 @@ class BusinessKnowledgeControllerTest {
 		BusinessKnowledgeVO vo = BusinessKnowledgeVO.builder().id(1L).businessTerm("GMV").build();
 		when(businessKnowledgeService.addKnowledge(dto)).thenReturn(vo);
 
-		ApiResponse<BusinessKnowledgeVO> result = controller.create(dto);
+		ApiResponse<BusinessKnowledgeVO> result = controller.create(dto, authentication);
 
 		assertTrue(result.isSuccess());
 		assertEquals("GMV", result.getData().getBusinessTerm());
@@ -115,7 +123,7 @@ class BusinessKnowledgeControllerTest {
 		BusinessKnowledgeVO vo = BusinessKnowledgeVO.builder().id(1L).businessTerm("Updated GMV").build();
 		when(businessKnowledgeService.updateKnowledge(1L, dto)).thenReturn(vo);
 
-		ApiResponse<BusinessKnowledgeVO> result = controller.update(1L, dto);
+		ApiResponse<BusinessKnowledgeVO> result = controller.update(1L, dto, authentication);
 
 		assertTrue(result.isSuccess());
 		assertEquals("Updated GMV", result.getData().getBusinessTerm());
@@ -126,7 +134,7 @@ class BusinessKnowledgeControllerTest {
 		BusinessKnowledgeVO vo = BusinessKnowledgeVO.builder().id(1L).build();
 		when(businessKnowledgeService.getKnowledgeById(1L)).thenReturn(vo);
 
-		ApiResponse<Boolean> result = controller.delete(1L);
+		ApiResponse<Boolean> result = controller.delete(1L, authentication);
 
 		assertTrue(result.isSuccess());
 		verify(businessKnowledgeService).deleteKnowledge(1L);
@@ -136,7 +144,7 @@ class BusinessKnowledgeControllerTest {
 	void delete_notFound_returnsError() {
 		when(businessKnowledgeService.getKnowledgeById(999L)).thenReturn(null);
 
-		ApiResponse<Boolean> result = controller.delete(999L);
+		ApiResponse<Boolean> result = controller.delete(999L, authentication);
 
 		assertFalse(result.isSuccess());
 		verify(businessKnowledgeService, never()).deleteKnowledge(anyLong());
@@ -144,7 +152,7 @@ class BusinessKnowledgeControllerTest {
 
 	@Test
 	void recallKnowledge_success_returnsSuccess() {
-		ApiResponse<Boolean> result = controller.recallKnowledge(1L, true);
+		ApiResponse<Boolean> result = controller.recallKnowledge(1L, true, authentication);
 
 		assertTrue(result.isSuccess());
 		verify(businessKnowledgeService).recallKnowledge(1L, true);
@@ -152,7 +160,7 @@ class BusinessKnowledgeControllerTest {
 
 	@Test
 	void refreshVectorStore_validAgentId_returnsSuccess() throws Exception {
-		ApiResponse<Boolean> result = controller.refreshAllKnowledgeToVectorStore("1");
+		ApiResponse<Boolean> result = controller.refreshAllKnowledgeToVectorStore("1", authentication);
 
 		assertTrue(result.isSuccess());
 		verify(businessKnowledgeService).refreshAllKnowledgeToVectorStore("1");
@@ -160,7 +168,7 @@ class BusinessKnowledgeControllerTest {
 
 	@Test
 	void refreshVectorStore_emptyAgentId_returnsError() throws Exception {
-		ApiResponse<Boolean> result = controller.refreshAllKnowledgeToVectorStore("");
+		ApiResponse<Boolean> result = controller.refreshAllKnowledgeToVectorStore("", authentication);
 
 		assertFalse(result.isSuccess());
 	}
@@ -170,14 +178,14 @@ class BusinessKnowledgeControllerTest {
 		doThrow(new RuntimeException("vector error")).when(businessKnowledgeService)
 			.refreshAllKnowledgeToVectorStore("1");
 
-		ApiResponse<Boolean> result = controller.refreshAllKnowledgeToVectorStore("1");
+		ApiResponse<Boolean> result = controller.refreshAllKnowledgeToVectorStore("1", authentication);
 
 		assertFalse(result.isSuccess());
 	}
 
 	@Test
 	void retryEmbedding_success_returnsSuccess() {
-		ApiResponse<Boolean> result = controller.retryEmbedding(1L);
+		ApiResponse<Boolean> result = controller.retryEmbedding(1L, authentication);
 
 		assertTrue(result.isSuccess());
 		verify(businessKnowledgeService).retryEmbedding(1L);

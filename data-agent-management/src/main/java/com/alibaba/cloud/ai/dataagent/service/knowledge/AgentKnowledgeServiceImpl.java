@@ -26,6 +26,7 @@ import com.alibaba.cloud.ai.dataagent.entity.AgentKnowledge;
 import com.alibaba.cloud.ai.dataagent.event.AgentKnowledgeDeletionEvent;
 import com.alibaba.cloud.ai.dataagent.event.AgentKnowledgeEmbeddingEvent;
 import com.alibaba.cloud.ai.dataagent.mapper.AgentKnowledgeMapper;
+import com.alibaba.cloud.ai.dataagent.mapper.AgentMapper;
 import com.alibaba.cloud.ai.dataagent.service.file.FileStorageService;
 import com.alibaba.cloud.ai.dataagent.vo.AgentKnowledgeVO;
 import lombok.AllArgsConstructor;
@@ -46,6 +47,8 @@ public class AgentKnowledgeServiceImpl implements AgentKnowledgeService {
 	private static final String AGENT_KNOWLEDGE_FILE_PATH = "agent-knowledge";
 
 	private final AgentKnowledgeMapper agentKnowledgeMapper;
+
+	private final AgentMapper agentMapper;
 
 	private final FileStorageService fileStorageService;
 
@@ -68,7 +71,13 @@ public class AgentKnowledgeServiceImpl implements AgentKnowledgeService {
 		if (createKnowledgeDto.getType().equals(KnowledgeType.DOCUMENT.getCode())) {
 			// 将文件保存到磁盘
 			try {
-				storagePath = fileStorageService.storeFile(createKnowledgeDto.getFile(), AGENT_KNOWLEDGE_FILE_PATH);
+				var agent = agentMapper.findById(createKnowledgeDto.getAgentId().longValue());
+				if (agent == null || agent.getUserId() == null) {
+					throw new IllegalArgumentException("Agent not found");
+				}
+				String tenantPath = "users/" + agent.getUserId() + "/agents/" + agent.getId() + "/"
+						+ AGENT_KNOWLEDGE_FILE_PATH;
+				storagePath = fileStorageService.storeFile(createKnowledgeDto.getFile(), tenantPath);
 			}
 			catch (Exception e) {
 				log.error("Failed to store file, agentId:{} title:{} type:{} ", createKnowledgeDto.getAgentId(),

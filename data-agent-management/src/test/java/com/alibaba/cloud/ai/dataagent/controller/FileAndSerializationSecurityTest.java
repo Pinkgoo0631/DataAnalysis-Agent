@@ -19,6 +19,7 @@ import com.alibaba.cloud.ai.dataagent.entity.Agent;
 import com.alibaba.cloud.ai.dataagent.entity.Datasource;
 import com.alibaba.cloud.ai.dataagent.properties.FileStorageProperties;
 import com.alibaba.cloud.ai.dataagent.service.file.FileStorageService;
+import com.alibaba.cloud.ai.dataagent.service.auth.ResourceOwnershipService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -37,6 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 class FileAndSerializationSecurityTest {
 
@@ -82,7 +84,7 @@ class FileAndSerializationSecurityTest {
 		Files.write(file, expected);
 
 		FileUploadController controller = new FileUploadController(buildFileStorageProperties(),
-				new NoopFileStorageService());
+				new NoopFileStorageService(), mock(ResourceOwnershipService.class));
 		MockServerHttpRequest request = MockServerHttpRequest.get("/api/upload/uploads/avatars/ok.txt").build();
 
 		ResponseEntity<byte[]> response = controller.getFile(request);
@@ -97,7 +99,7 @@ class FileAndSerializationSecurityTest {
 		Files.write(parentSecret, "top-secret".getBytes(StandardCharsets.UTF_8));
 
 		FileUploadController controller = new FileUploadController(buildFileStorageProperties(),
-				new NoopFileStorageService());
+				new NoopFileStorageService(), mock(ResourceOwnershipService.class));
 		MockServerHttpRequest request = MockServerHttpRequest.get("/api/upload/uploads/../secret.txt").build();
 
 		ResponseEntity<byte[]> response = controller.getFile(request);

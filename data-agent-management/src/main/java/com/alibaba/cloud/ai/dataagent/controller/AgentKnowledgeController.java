@@ -21,6 +21,7 @@ import com.alibaba.cloud.ai.dataagent.dto.knowledge.agentknowledge.AgentKnowledg
 import com.alibaba.cloud.ai.dataagent.dto.knowledge.agentknowledge.CreateKnowledgeDTO;
 import com.alibaba.cloud.ai.dataagent.dto.knowledge.agentknowledge.UpdateKnowledgeDTO;
 import com.alibaba.cloud.ai.dataagent.service.knowledge.AgentKnowledgeService;
+import com.alibaba.cloud.ai.dataagent.service.auth.ResourceOwnershipService;
 import com.alibaba.cloud.ai.dataagent.vo.AgentKnowledgeVO;
 import com.alibaba.cloud.ai.dataagent.vo.ApiResponse;
 import com.alibaba.cloud.ai.dataagent.vo.PageResponse;
@@ -34,6 +35,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
+import org.springframework.security.core.Authentication;
 
 import java.util.List;
 
@@ -43,18 +45,21 @@ import java.util.List;
 @Slf4j
 @RestController
 @RequestMapping("/api/agent-knowledge")
-@CrossOrigin(origins = "*")
 @AllArgsConstructor
 public class AgentKnowledgeController {
 
 	private final AgentKnowledgeService agentKnowledgeService;
 
+	private final ResourceOwnershipService ownershipService;
+
 	/**
 	 * Query knowledge details by ID
 	 */
 	@GetMapping("/{id}")
-	public ApiResponse<AgentKnowledgeVO> getKnowledgeById(@PathVariable("id") Integer id) {
+	public ApiResponse<AgentKnowledgeVO> getKnowledgeById(@PathVariable("id") Integer id,
+			Authentication authentication) {
 		try {
+			ownershipService.requireAgentKnowledge(id, authentication);
 			AgentKnowledgeVO knowledge = agentKnowledgeService.getKnowledgeById(id);
 			if (knowledge != null) {
 				return ApiResponse.success("查询成功", knowledge);
@@ -78,7 +83,9 @@ public class AgentKnowledgeController {
 			@RequestPart(value = "question", required = false) String question,
 			@RequestPart(value = "content", required = false) String content,
 			@RequestPart(value = "file", required = false) FilePart filePart,
-			@RequestPart(value = "splitterType", required = false) String splitterType) {
+			@RequestPart(value = "splitterType", required = false) String splitterType,
+			Authentication authentication) {
+		ownershipService.requireAgent(Long.valueOf(agentId), authentication);
 
 		// 如果没有文件，直接同步处理
 		if (filePart == null) {
@@ -128,14 +135,16 @@ public class AgentKnowledgeController {
 	 */
 	@PutMapping("/{id}")
 	public ApiResponse<AgentKnowledgeVO> updateKnowledge(@PathVariable("id") Integer id,
-			@RequestBody UpdateKnowledgeDTO updateKnowledgeDto) {
+			@RequestBody UpdateKnowledgeDTO updateKnowledgeDto, Authentication authentication) {
+		ownershipService.requireAgentKnowledge(id, authentication);
 		AgentKnowledgeVO knowledge = agentKnowledgeService.updateKnowledge(id, updateKnowledgeDto);
 		return ApiResponse.success("更新成功", knowledge);
 	}
 
 	@PutMapping("/recall/{id}")
 	public ApiResponse<AgentKnowledgeVO> updateRecallStatus(@PathVariable Integer id,
-			@RequestParam(value = "isRecall") Boolean isRecall) {
+			@RequestParam(value = "isRecall") Boolean isRecall, Authentication authentication) {
+		ownershipService.requireAgentKnowledge(id, authentication);
 		AgentKnowledgeVO agentKnowledgeVO = agentKnowledgeService.updateKnowledgeRecallStatus(id, isRecall);
 		return ApiResponse.success("更新成功", agentKnowledgeVO);
 	}
@@ -144,14 +153,17 @@ public class AgentKnowledgeController {
 	 * Delete knowledge
 	 */
 	@DeleteMapping("/{id}")
-	public ApiResponse<Boolean> deleteKnowledge(@PathVariable("id") Integer id) {
+	public ApiResponse<Boolean> deleteKnowledge(@PathVariable("id") Integer id, Authentication authentication) {
+		ownershipService.requireAgentKnowledge(id, authentication);
 		return agentKnowledgeService.deleteKnowledge(id) ? ApiResponse.success("删除操作已接收，等待后台删除相关资源...")
 				: ApiResponse.error("删除失败");
 	}
 
 	@PostMapping("/query/page")
-	public PageResponse<List<AgentKnowledgeVO>> queryByPage(@Valid @RequestBody AgentKnowledgeQueryDTO queryDTO) {
+	public PageResponse<List<AgentKnowledgeVO>> queryByPage(@Valid @RequestBody AgentKnowledgeQueryDTO queryDTO,
+			Authentication authentication) {
 		try {
+			ownershipService.requireAgent(queryDTO.getAgentId().longValue(), authentication);
 			PageResult<AgentKnowledgeVO> pageResult = agentKnowledgeService.queryByConditionsWithPage(queryDTO);
 			return PageResponse.success(pageResult.getData(), pageResult.getTotal(), pageResult.getPageNum(),
 					pageResult.getPageSize(), pageResult.getTotalPages());
@@ -163,7 +175,8 @@ public class AgentKnowledgeController {
 	}
 
 	@PostMapping("/retry-embedding/{id}")
-	public ApiResponse<AgentKnowledgeVO> retryEmbedding(@PathVariable Integer id) {
+	public ApiResponse<AgentKnowledgeVO> retryEmbedding(@PathVariable Integer id, Authentication authentication) {
+		ownershipService.requireAgentKnowledge(id, authentication);
 		agentKnowledgeService.retryEmbedding(id);
 		return ApiResponse.success("重试向量化操作成功，如果是文件解析需要花费点时间，请耐心等待...");
 	}

@@ -83,6 +83,9 @@ public interface UserPromptConfigMapper {
 	@Select("SELECT * FROM user_prompt_config WHERE id = #{id}")
 	UserPromptConfig selectById(String id);
 
+	@Select("SELECT * FROM user_prompt_config WHERE id = #{id} AND user_id = #{userId}")
+	UserPromptConfig selectByIdAndUserId(@Param("id") String id, @Param("userId") Long userId);
+
 	@Update("""
 			<script>
 			UPDATE user_prompt_config
@@ -104,8 +107,8 @@ public interface UserPromptConfigMapper {
 
 	@Insert("""
 			INSERT INTO user_prompt_config
-			(id, name, prompt_type, agent_id, system_prompt, enabled, description, priority, display_order, create_time, update_time, creator)
-			VALUES (#{id}, #{name}, #{promptType}, #{agentId}, #{systemPrompt}, #{enabled}, #{description}, #{priority}, #{displayOrder}, NOW(), NOW(), #{creator})
+			(id, name, prompt_type, agent_id, system_prompt, enabled, description, priority, display_order, create_time, update_time, creator, user_id)
+			VALUES (#{id}, #{name}, #{promptType}, #{agentId}, #{systemPrompt}, #{enabled}, #{description}, #{priority}, #{displayOrder}, NOW(), NOW(), #{creator}, #{userId})
 			""")
 	int insert(UserPromptConfig config);
 
@@ -133,6 +136,23 @@ public interface UserPromptConfigMapper {
 
 	@Select("SELECT * FROM user_prompt_config ORDER BY priority DESC, display_order, update_time DESC")
 	List<UserPromptConfig> selectAll();
+
+	@Select("""
+			SELECT * FROM user_prompt_config WHERE user_id = #{userId}
+			ORDER BY priority DESC, display_order, update_time DESC
+			""")
+	List<UserPromptConfig> selectAllByUserId(@Param("userId") Long userId);
+
+	@Select("""
+			<script>
+			SELECT * FROM user_prompt_config
+			WHERE user_id = #{userId} AND prompt_type = #{promptType}
+			<if test='agentId != null'> AND agent_id = #{agentId}</if>
+			ORDER BY priority DESC, display_order, update_time DESC
+			</script>
+			""")
+	List<UserPromptConfig> getConfigsByTypeAndUserId(@Param("promptType") String promptType,
+			@Param("agentId") Long agentId, @Param("userId") Long userId);
 
 	@Delete("DELETE FROM user_prompt_config WHERE id = #{id}")
 	int deleteById(String id);

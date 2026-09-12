@@ -21,6 +21,7 @@ import com.alibaba.cloud.ai.dataagent.entity.AgentDatasource;
 import com.alibaba.cloud.ai.dataagent.exception.InternalServerException;
 import com.alibaba.cloud.ai.dataagent.exception.InvalidInputException;
 import com.alibaba.cloud.ai.dataagent.service.datasource.AgentDatasourceService;
+import com.alibaba.cloud.ai.dataagent.service.auth.ResourceOwnershipService;
 import com.alibaba.cloud.ai.dataagent.vo.ApiResponse;
 import java.util.List;
 import java.util.Optional;
@@ -28,6 +29,7 @@ import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.Authentication;
 
 /**
  * Agent Schema Initialization Controller Handles agent's database Schema initialization
@@ -36,18 +38,20 @@ import org.springframework.web.bind.annotation.*;
 @Slf4j
 @RestController
 @RequestMapping("/api/agent/{agentId}/datasources")
-@CrossOrigin(origins = "*")
 @AllArgsConstructor
 public class AgentDatasourceController {
 
 	private final AgentDatasourceService agentDatasourceService;
+
+	private final ResourceOwnershipService ownershipService;
 
 	/**
 	 * Initialize agent's database Schema to vector storage Corresponds to the "Initialize
 	 * Information Source" function on the frontend
 	 */
 	@PostMapping("/init")
-	public ApiResponse<?> initSchema(@PathVariable Long agentId) {
+	public ApiResponse<?> initSchema(@PathVariable Long agentId, Authentication authentication) {
+		ownershipService.requireAgent(agentId, authentication);
 		// 防止前端恶意请求，dto数据应该在后端获取
 		try {
 			AgentDatasource agentDatasource = agentDatasourceService.getCurrentAgentDatasource(agentId);
@@ -86,7 +90,9 @@ public class AgentDatasourceController {
 
 	/** Get list of data sources configured for agent */
 	@GetMapping
-	public ApiResponse<List<AgentDatasource>> getAgentDatasource(@PathVariable Long agentId) {
+	public ApiResponse<List<AgentDatasource>> getAgentDatasource(@PathVariable Long agentId,
+			Authentication authentication) {
+		ownershipService.requireAgent(agentId, authentication);
 		try {
 			log.info("Getting datasources for agent: {}", agentId);
 			List<AgentDatasource> datasources = agentDatasourceService.getAgentDatasource(agentId);
@@ -100,7 +106,9 @@ public class AgentDatasourceController {
 	}
 
 	@GetMapping("/active")
-	public ApiResponse<AgentDatasource> getActiveAgentDatasource(@PathVariable Long agentId) {
+	public ApiResponse<AgentDatasource> getActiveAgentDatasource(@PathVariable Long agentId,
+			Authentication authentication) {
+		ownershipService.requireAgent(agentId, authentication);
 		try {
 			log.info("Getting active datasource for agent: {}", agentId);
 			AgentDatasource datasource = agentDatasourceService.getCurrentAgentDatasource(agentId);
@@ -115,7 +123,9 @@ public class AgentDatasourceController {
 	/** Add data source for agent */
 	@PostMapping("/{datasourceId}")
 	public ApiResponse<AgentDatasource> addDatasourceToAgent(@PathVariable Long agentId,
-			@PathVariable Integer datasourceId) {
+			@PathVariable Integer datasourceId, Authentication authentication) {
+		ownershipService.requireAgent(agentId, authentication);
+		ownershipService.requireDatasource(datasourceId, authentication);
 		try {
 			if (datasourceId == null) {
 				throw new InvalidInputException("数据源ID不能为空");
@@ -132,7 +142,9 @@ public class AgentDatasourceController {
 	// 更新选择的数据表
 	@PostMapping("/tables")
 	public ApiResponse<?> updateDatasourceTables(@PathVariable Long agentId,
-			@RequestBody @Validated UpdateDatasourceTablesDTO dto) {
+			@RequestBody @Validated UpdateDatasourceTablesDTO dto, Authentication authentication) {
+		ownershipService.requireAgent(agentId, authentication);
+		ownershipService.requireDatasource(dto.getDatasourceId(), authentication);
 		try {
 			dto.setTables(Optional.ofNullable(dto.getTables()).orElse(List.of()));
 			agentDatasourceService.updateDatasourceTables(agentId, dto.getDatasourceId(), dto.getTables());
@@ -146,7 +158,10 @@ public class AgentDatasourceController {
 
 	/** Remove data source association from agent */
 	@DeleteMapping("/{datasourceId}")
-	public ApiResponse<?> removeDatasourceFromAgent(@PathVariable Long agentId, @PathVariable Integer datasourceId) {
+	public ApiResponse<?> removeDatasourceFromAgent(@PathVariable Long agentId, @PathVariable Integer datasourceId,
+			Authentication authentication) {
+		ownershipService.requireAgent(agentId, authentication);
+		ownershipService.requireDatasource(datasourceId, authentication);
 		try {
 			agentDatasourceService.removeDatasourceFromAgent(agentId, datasourceId);
 			return ApiResponse.success("数据源已移除");
@@ -159,7 +174,9 @@ public class AgentDatasourceController {
 	/** 启用/禁用智能体的数据源 */
 	@PutMapping("/toggle")
 	public ApiResponse<AgentDatasource> toggleDatasourceForAgent(@PathVariable Long agentId,
-			@RequestBody ToggleDatasourceDTO dto) {
+			@RequestBody ToggleDatasourceDTO dto, Authentication authentication) {
+		ownershipService.requireAgent(agentId, authentication);
+		ownershipService.requireDatasource(dto.getDatasourceId(), authentication);
 		try {
 			Boolean isActive = dto.getIsActive();
 			Integer datasourceId = dto.getDatasourceId();

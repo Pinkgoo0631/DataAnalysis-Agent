@@ -17,6 +17,7 @@ package com.alibaba.cloud.ai.dataagent.service.chat;
 
 import com.alibaba.cloud.ai.dataagent.entity.ChatSession;
 import com.alibaba.cloud.ai.dataagent.service.llm.LlmService;
+import com.alibaba.cloud.ai.dataagent.service.aimodelconfig.ModelUserContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -74,7 +75,7 @@ public class SessionTitleService {
 				return;
 			}
 
-			String title = requestSummary(userMessage);
+			String title = requestSummary(userMessage, session.getUserId());
 			if (!StringUtils.hasText(title)) {
 				title = fallbackTitle(userMessage);
 			}
@@ -97,7 +98,7 @@ public class SessionTitleService {
 		return StringUtils.hasText(session.getTitle()) && !DEFAULT_TITLE.equals(session.getTitle());
 	}
 
-	private String requestSummary(String userMessage) {
+	private String requestSummary(String userMessage, Long userId) {
 		try {
 			String systemPrompt = """
 					你是会话标题生成器。仅根据用户的第一条输入提取核心主题。
@@ -118,6 +119,7 @@ public class SessionTitleService {
 			Flux<String> responseFlux = llmService.toStringFlux(llmService.call(systemPrompt, userPrompt));
 			return responseFlux.collect(StringBuilder::new, StringBuilder::append)
 				.map(StringBuilder::toString)
+				.contextWrite(context -> userId == null ? context : context.put(ModelUserContext.USER_ID, userId))
 				.block(Duration.ofSeconds(15));
 		}
 		catch (Exception ex) {

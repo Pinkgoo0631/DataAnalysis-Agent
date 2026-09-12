@@ -1,5 +1,17 @@
 -- 简化的数据库初始化脚本，兼容Spring Boot SQL初始化
 
+CREATE TABLE IF NOT EXISTS app_user (
+  id BIGINT NOT NULL AUTO_INCREMENT,
+  username VARCHAR(64) NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  role VARCHAR(20) NOT NULL DEFAULT 'USER',
+  status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+  create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_app_user_username (username)
+) ENGINE = InnoDB COMMENT = 'DataAgent应用用户';
+
 -- 智能体表
 CREATE TABLE IF NOT EXISTS agent (
     id INT NOT NULL AUTO_INCREMENT,
@@ -12,6 +24,7 @@ CREATE TABLE IF NOT EXISTS agent (
     prompt TEXT COMMENT '自定义Prompt配置',
     category VARCHAR(100) COMMENT '分类',
     admin_id BIGINT COMMENT '管理员ID',
+    user_id BIGINT COMMENT '所属应用用户ID',
     tags TEXT COMMENT '标签，逗号分隔',
     create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
@@ -19,7 +32,8 @@ CREATE TABLE IF NOT EXISTS agent (
     INDEX idx_name (name),
     INDEX idx_status (status),
     INDEX idx_category (category),
-    INDEX idx_admin_id (admin_id)
+    INDEX idx_admin_id (admin_id),
+    INDEX idx_agent_user_id (user_id)
     ) ENGINE = InnoDB COMMENT = '智能体表';
 
 -- 业务知识表
@@ -109,13 +123,15 @@ CREATE TABLE IF NOT EXISTS datasource (
   test_status VARCHAR(50) DEFAULT 'unknown' COMMENT '连接测试状态：success-成功，failed-失败，unknown-未知',
   description TEXT COMMENT '描述',
   creator_id BIGINT COMMENT '创建者ID',
+  user_id BIGINT COMMENT '所属应用用户ID',
   create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (id),
   INDEX idx_name (name),
   INDEX idx_type (type),
   INDEX idx_status (status),
-  INDEX idx_creator_id (creator_id)
+  INDEX idx_creator_id (creator_id),
+  INDEX idx_datasource_user_id (user_id)
 ) ENGINE = InnoDB COMMENT = '数据源表';
 
 -- 逻辑外键配置表
@@ -220,13 +236,15 @@ CREATE TABLE IF NOT EXISTS user_prompt_config (
   create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   creator VARCHAR(255) COMMENT '创建者',
+  user_id BIGINT COMMENT '所属应用用户ID',
   PRIMARY KEY (id),
   INDEX idx_prompt_type (prompt_type),
   INDEX idx_agent_id (agent_id),
   INDEX idx_enabled (enabled),
   INDEX idx_create_time (create_time),
   INDEX idx_prompt_type_enabled_priority (prompt_type, agent_id, enabled, priority DESC),
-  INDEX idx_display_order (display_order ASC)
+  INDEX idx_display_order (display_order ASC),
+  INDEX idx_user_prompt_config_user_id (user_id)
 ) ENGINE = InnoDB COMMENT = '用户Prompt配置表';
 
 create table if not exists agent_datasource_tables
@@ -267,5 +285,7 @@ CREATE TABLE IF NOT EXISTS `model_config` (
     `proxy_port` int(11) DEFAULT NULL COMMENT '代理端口',
     `proxy_username` varchar(255) DEFAULT NULL COMMENT '代理用户名（可选）',
     `proxy_password` varchar(255) DEFAULT NULL COMMENT '代理密码（可选）',
-    PRIMARY KEY (`id`)
+    `user_id` BIGINT DEFAULT NULL COMMENT '所属应用用户ID',
+    PRIMARY KEY (`id`),
+    INDEX `idx_model_config_user_id` (`user_id`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

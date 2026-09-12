@@ -23,13 +23,23 @@ public interface AgentService {
 
 	List<Agent> findAll();
 
+	List<Agent> findAll(Long userId);
+
 	Agent findById(Long id);
+
+	Agent findById(Long id, Long userId);
 
 	List<Agent> findByStatus(String status);
 
+	List<Agent> findByStatus(String status, Long userId);
+
 	List<Agent> search(String keyword);
 
+	List<Agent> search(String keyword, Long userId);
+
 	Agent save(Agent agent);
+
+	Agent save(Agent agent, Long userId);
 
 	void deleteById(Long id);
 

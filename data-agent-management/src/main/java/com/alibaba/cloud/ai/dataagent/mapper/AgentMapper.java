@@ -28,15 +28,24 @@ public interface AgentMapper {
 			""")
 	List<Agent> findAll();
 
+	@Select("SELECT * FROM agent WHERE user_id = #{userId} ORDER BY create_time DESC")
+	List<Agent> findAllByUserId(@Param("userId") Long userId);
+
 	@Select("""
 			SELECT * FROM agent WHERE id = #{id}
 			""")
 	Agent findById(Long id);
 
+	@Select("SELECT * FROM agent WHERE id = #{id} AND user_id = #{userId}")
+	Agent findByIdAndUserId(@Param("id") Long id, @Param("userId") Long userId);
+
 	@Select("""
 			SELECT * FROM agent WHERE status = #{status} ORDER BY create_time DESC
 			""")
 	List<Agent> findByStatus(String status);
+
+	@Select("SELECT * FROM agent WHERE status = #{status} AND user_id = #{userId} ORDER BY create_time DESC")
+	List<Agent> findByStatusAndUserId(@Param("status") String status, @Param("userId") Long userId);
 
 	@Select("""
 			SELECT * FROM agent
@@ -46,6 +55,16 @@ public interface AgentMapper {
 			ORDER BY create_time DESC
 			""")
 	List<Agent> searchByKeyword(@Param("keyword") String keyword);
+
+	@Select("""
+			SELECT * FROM agent
+			WHERE user_id = #{userId}
+			  AND (name LIKE CONCAT('%', #{keyword}, '%')
+			       OR description LIKE CONCAT('%', #{keyword}, '%')
+			       OR tags LIKE CONCAT('%', #{keyword}, '%'))
+			ORDER BY create_time DESC
+			""")
+	List<Agent> searchByKeywordAndUserId(@Param("keyword") String keyword, @Param("userId") Long userId);
 
 	@Select("""
 			<script>
@@ -66,8 +85,8 @@ public interface AgentMapper {
 	List<Agent> findByConditions(@Param("status") String status, @Param("keyword") String keyword);
 
 	@Insert("""
-			INSERT INTO agent (name, description, avatar, status, api_key, api_key_enabled, prompt, category, admin_id, tags, create_time, update_time)
-			VALUES (#{name}, #{description}, #{avatar}, #{status}, #{apiKey}, #{apiKeyEnabled}, #{prompt}, #{category}, #{adminId}, #{tags}, #{createTime}, #{updateTime})
+			INSERT INTO agent (name, description, avatar, status, api_key, api_key_enabled, prompt, category, admin_id, user_id, tags, create_time, update_time)
+			VALUES (#{name}, #{description}, #{avatar}, #{status}, #{apiKey}, #{apiKeyEnabled}, #{prompt}, #{category}, #{adminId}, #{userId}, #{tags}, #{createTime}, #{updateTime})
 			""")
 	@Options(useGeneratedKeys = true, keyProperty = "id", keyColumn = "id")
 	int insert(Agent agent);

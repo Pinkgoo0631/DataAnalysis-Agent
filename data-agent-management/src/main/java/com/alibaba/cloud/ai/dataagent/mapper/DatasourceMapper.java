@@ -38,13 +38,19 @@ public interface DatasourceMapper {
 	@Select("SELECT * FROM datasource WHERE id = #{id}")
 	Datasource selectById(@Param("id") Integer id);
 
+	@Select("SELECT * FROM datasource WHERE id = #{id} AND user_id = #{userId}")
+	Datasource selectByIdAndUserId(@Param("id") Integer id, @Param("userId") Long userId);
+
 	@Select("SELECT * FROM datasource ORDER BY create_time DESC")
 	List<Datasource> selectAll();
 
+	@Select("SELECT * FROM datasource WHERE user_id = #{userId} ORDER BY create_time DESC")
+	List<Datasource> selectAllByUserId(@Param("userId") Long userId);
+
 	@Insert("""
 			INSERT INTO datasource
-			    (name, type, host, port, database_name, username, password, connection_url, status, test_status, description, creator_id, create_time, update_time)
-			VALUES (#{name}, #{type}, #{host}, #{port}, #{databaseName}, #{username}, #{password}, #{connectionUrl}, #{status}, #{testStatus}, #{description}, #{creatorId}, NOW(), NOW())
+			    (name, type, host, port, database_name, username, password, connection_url, status, test_status, description, creator_id, user_id, create_time, update_time)
+			VALUES (#{name}, #{type}, #{host}, #{port}, #{databaseName}, #{username}, #{password}, #{connectionUrl}, #{status}, #{testStatus}, #{description}, #{creatorId}, #{userId}, NOW(), NOW())
 			""")
 	@Options(useGeneratedKeys = true, keyProperty = "id", keyColumn = "id")
 	int insert(Datasource datasource);
@@ -84,11 +90,17 @@ public interface DatasourceMapper {
 	@Select("SELECT * FROM datasource WHERE status = #{status} ORDER BY create_time DESC")
 	List<Datasource> selectByStatus(@Param("status") String status);
 
+	@Select("SELECT * FROM datasource WHERE status = #{status} AND user_id = #{userId} ORDER BY create_time DESC")
+	List<Datasource> selectByStatusAndUserId(@Param("status") String status, @Param("userId") Long userId);
+
 	/**
 	 * Query data source list by type
 	 */
 	@Select("SELECT * FROM datasource WHERE type = #{type} ORDER BY create_time DESC")
 	List<Datasource> selectByType(@Param("type") String type);
+
+	@Select("SELECT * FROM datasource WHERE type = #{type} AND user_id = #{userId} ORDER BY create_time DESC")
+	List<Datasource> selectByTypeAndUserId(@Param("type") String type, @Param("userId") Long userId);
 
 	/**
 	 * Get data source statistics - by status

@@ -57,6 +57,8 @@ public class Agent {
 
 	private Long adminId; // Admin ID
 
+	private Long userId; // Owning application user
+
 	private String tags; // Tags, comma separated
 
 	@JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")

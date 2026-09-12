@@ -21,6 +21,8 @@ import com.alibaba.cloud.ai.dataagent.entity.ChatSession;
 import com.alibaba.cloud.ai.dataagent.service.chat.ChatMessageService;
 import com.alibaba.cloud.ai.dataagent.service.chat.ChatSessionService;
 import com.alibaba.cloud.ai.dataagent.service.chat.SessionTitleService;
+import com.alibaba.cloud.ai.dataagent.service.auth.ResourceOwnershipService;
+import com.alibaba.cloud.ai.dataagent.support.AuthenticationTestSupport;
 import com.alibaba.cloud.ai.dataagent.util.ReportTemplateUtil;
 import com.alibaba.cloud.ai.dataagent.vo.ApiResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,6 +33,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 
 import java.util.List;
 import java.util.Map;
@@ -54,12 +57,18 @@ class ChatControllerTest {
 	@Mock
 	private ReportTemplateUtil reportTemplateUtil;
 
+	@Mock
+	private ResourceOwnershipService ownershipService;
+
 	private ChatController chatController;
+
+	private final Authentication authentication = AuthenticationTestSupport.user();
 
 	@BeforeEach
 	void setUp() {
 		chatController = new ChatController(chatSessionService, chatMessageService, sessionTitleService,
-				reportTemplateUtil);
+				reportTemplateUtil, ownershipService);
+		when(ownershipService.userId(authentication)).thenReturn(1L);
 	}
 
 	@Test
@@ -70,9 +79,9 @@ class ChatControllerTest {
 			.title("New Session")
 			.status("active")
 			.build();
-		when(chatSessionService.createSession(1, "New Session", null)).thenReturn(session);
+		when(chatSessionService.createSession(1, "New Session", 1L)).thenReturn(session);
 
-		ResponseEntity<ChatSession> result = chatController.createSession(1, Map.of("title", "New Session"));
+		ResponseEntity<ChatSession> result = chatController.createSession(1, Map.of("title", "New Session"), authentication);
 
 		assertEquals(200, result.getStatusCode().value());
 		assertNotNull(result.getBody());
@@ -82,9 +91,9 @@ class ChatControllerTest {
 	@Test
 	void createSession_nullBody_createsWithNulls() {
 		ChatSession session = ChatSession.builder().id("uuid-2").agentId(1).build();
-		when(chatSessionService.createSession(1, null, null)).thenReturn(session);
+		when(chatSessionService.createSession(1, null, 1L)).thenReturn(session);
 
-		ResponseEntity<ChatSession> result = chatController.createSession(1, null);
+		ResponseEntity<ChatSession> result = chatController.createSession(1, null, authentication);
 
 		assertEquals(200, result.getStatusCode().value());
 		assertEquals("uuid-2", result.getBody().getId());
@@ -97,7 +106,7 @@ class ChatControllerTest {
 				ChatMessage.builder().id(2L).sessionId("uuid-1").role("assistant").content("Hi there").build());
 		when(chatMessageService.findBySessionId("uuid-1")).thenReturn(messages);
 
-		ResponseEntity<List<ChatMessage>> result = chatController.getSessionMessages("uuid-1");
+		ResponseEntity<List<ChatMessage>> result = chatController.getSessionMessages("uuid-1", authentication);
 
 		assertEquals(200, result.getStatusCode().value());
 		assertEquals(2, result.getBody().size());
@@ -107,7 +116,7 @@ class ChatControllerTest {
 	void deleteSession_existingId_returns200() {
 		doNothing().when(chatSessionService).deleteSession("uuid-1");
 
-		ResponseEntity<ApiResponse> result = chatController.deleteSession("uuid-1");
+		ResponseEntity<ApiResponse> result = chatController.deleteSession("uuid-1", authentication);
 
 		assertEquals(200, result.getStatusCode().value());
 		assertTrue(result.getBody().isSuccess());
@@ -118,7 +127,7 @@ class ChatControllerTest {
 	void deleteSession_serviceThrows_returns500() {
 		doThrow(new RuntimeException("db error")).when(chatSessionService).deleteSession("uuid-1");
 
-		ResponseEntity<ApiResponse> result = chatController.deleteSession("uuid-1");
+		ResponseEntity<ApiResponse> result = chatController.deleteSession("uuid-1", authentication);
 
 		assertEquals(500, result.getStatusCode().value());
 		assertFalse(result.getBody().isSuccess());
@@ -129,7 +138,7 @@ class ChatControllerTest {
 		when(reportTemplateUtil.getHeader()).thenReturn("<html><head></head><body>");
 		when(reportTemplateUtil.getFooter()).thenReturn("</body></html>");
 
-		ResponseEntity<byte[]> result = chatController.convertAndDownloadHtml("uuid-1", "# Report Content");
+		ResponseEntity<byte[]> result = chatController.convertAndDownloadHtml("uuid-1", "# Report Content", authentication);
 
 		assertEquals(200, result.getStatusCode().value());
 		assertNotNull(result.getBody());
@@ -140,14 +149,14 @@ class ChatControllerTest {
 
 	@Test
 	void downloadReport_emptyContent_returnsBadRequest() {
-		ResponseEntity<byte[]> result = chatController.convertAndDownloadHtml("uuid-1", "");
+		ResponseEntity<byte[]> result = chatController.convertAndDownloadHtml("uuid-1", "", authentication);
 
 		assertEquals(400, result.getStatusCode().value());
 	}
 
 	@Test
 	void downloadReport_nullContent_returnsBadRequest() {
-		ResponseEntity<byte[]> result = chatController.convertAndDownloadHtml("uuid-1", null);
+		ResponseEntity<byte[]> result = chatController.convertAndDownloadHtml("uuid-1", null, authentication);
 
 		assertEquals(400, result.getStatusCode().value());
 	}
@@ -156,7 +165,7 @@ class ChatControllerTest {
 	void downloadReport_templateThrows_returns500() {
 		when(reportTemplateUtil.getHeader()).thenThrow(new RuntimeException("template error"));
 
-		ResponseEntity<byte[]> result = chatController.convertAndDownloadHtml("uuid-1", "content");
+		ResponseEntity<byte[]> result = chatController.convertAndDownloadHtml("uuid-1", "content", authentication);
 
 		assertEquals(500, result.getStatusCode().value());
 	}
@@ -165,7 +174,7 @@ class ChatControllerTest {
 	void pinSession_pinTrue_returnsSuccess() {
 		doNothing().when(chatSessionService).pinSession("uuid-1", true);
 
-		ResponseEntity<ApiResponse> result = chatController.pinSession("uuid-1", true);
+		ResponseEntity<ApiResponse> result = chatController.pinSession("uuid-1", true, authentication);
 
 		assertEquals(200, result.getStatusCode().value());
 		assertTrue(result.getBody().isSuccess());
@@ -176,7 +185,7 @@ class ChatControllerTest {
 	void pinSession_pinFalse_returnsUnpinnedMessage() {
 		doNothing().when(chatSessionService).pinSession("uuid-1", false);
 
-		ResponseEntity<ApiResponse> result = chatController.pinSession("uuid-1", false);
+		ResponseEntity<ApiResponse> result = chatController.pinSession("uuid-1", false, authentication);
 
 		assertEquals(200, result.getStatusCode().value());
 		assertTrue(result.getBody().isSuccess());
@@ -186,7 +195,7 @@ class ChatControllerTest {
 	void pinSession_serviceThrows_returns500() {
 		doThrow(new RuntimeException("pin error")).when(chatSessionService).pinSession("uuid-1", true);
 
-		ResponseEntity<ApiResponse> result = chatController.pinSession("uuid-1", true);
+		ResponseEntity<ApiResponse> result = chatController.pinSession("uuid-1", true, authentication);
 
 		assertEquals(500, result.getStatusCode().value());
 		assertFalse(result.getBody().isSuccess());
@@ -196,7 +205,7 @@ class ChatControllerTest {
 	void renameSession_validTitle_returnsSuccess() {
 		doNothing().when(chatSessionService).renameSession("uuid-1", "New Title");
 
-		ResponseEntity<ApiResponse> result = chatController.renameSession("uuid-1", "New Title");
+		ResponseEntity<ApiResponse> result = chatController.renameSession("uuid-1", "New Title", authentication);
 
 		assertEquals(200, result.getStatusCode().value());
 		assertTrue(result.getBody().isSuccess());
@@ -205,7 +214,7 @@ class ChatControllerTest {
 
 	@Test
 	void renameSession_emptyTitle_returnsBadRequest() {
-		ResponseEntity<ApiResponse> result = chatController.renameSession("uuid-1", "");
+		ResponseEntity<ApiResponse> result = chatController.renameSession("uuid-1", "", authentication);
 
 		assertEquals(400, result.getStatusCode().value());
 		assertFalse(result.getBody().isSuccess());
@@ -213,7 +222,7 @@ class ChatControllerTest {
 
 	@Test
 	void renameSession_blankTitle_returnsBadRequest() {
-		ResponseEntity<ApiResponse> result = chatController.renameSession("uuid-1", "   ");
+		ResponseEntity<ApiResponse> result = chatController.renameSession("uuid-1", "   ", authentication);
 
 		assertEquals(400, result.getStatusCode().value());
 	}
@@ -222,7 +231,7 @@ class ChatControllerTest {
 	void renameSession_serviceThrows_returns500() {
 		doThrow(new RuntimeException("rename error")).when(chatSessionService).renameSession("uuid-1", "title");
 
-		ResponseEntity<ApiResponse> result = chatController.renameSession("uuid-1", "title");
+		ResponseEntity<ApiResponse> result = chatController.renameSession("uuid-1", "title", authentication);
 
 		assertEquals(500, result.getStatusCode().value());
 		assertFalse(result.getBody().isSuccess());
@@ -232,7 +241,7 @@ class ChatControllerTest {
 	void renameSession_trimmedTitle_trimsBefore() {
 		doNothing().when(chatSessionService).renameSession("uuid-1", "trimmed");
 
-		ResponseEntity<ApiResponse> result = chatController.renameSession("uuid-1", "  trimmed  ");
+		ResponseEntity<ApiResponse> result = chatController.renameSession("uuid-1", "  trimmed  ", authentication);
 
 		assertEquals(200, result.getStatusCode().value());
 		verify(chatSessionService).renameSession("uuid-1", "trimmed");
@@ -240,11 +249,11 @@ class ChatControllerTest {
 
 	@Test
 	void getAgentSessions_returnsSessions() {
-		List<ChatSession> sessions = List.of(ChatSession.builder().id("s1").agentId(1).build(),
-				ChatSession.builder().id("s2").agentId(1).build());
+		List<ChatSession> sessions = List.of(ChatSession.builder().id("s1").agentId(1).userId(1L).build(),
+				ChatSession.builder().id("s2").agentId(1).userId(1L).build());
 		when(chatSessionService.findByAgentId(1)).thenReturn(sessions);
 
-		ResponseEntity<List<ChatSession>> result = chatController.getAgentSessions(1);
+		ResponseEntity<List<ChatSession>> result = chatController.getAgentSessions(1, authentication);
 
 		assertEquals(200, result.getStatusCode().value());
 		assertEquals(2, result.getBody().size());
@@ -254,7 +263,7 @@ class ChatControllerTest {
 	void clearAgentSessions_returns200() {
 		doNothing().when(chatSessionService).clearSessionsByAgentId(1);
 
-		ResponseEntity<ApiResponse> result = chatController.clearAgentSessions(1);
+		ResponseEntity<ApiResponse> result = chatController.clearAgentSessions(1, authentication);
 
 		assertEquals(200, result.getStatusCode().value());
 		assertTrue(result.getBody().isSuccess());
@@ -271,7 +280,7 @@ class ChatControllerTest {
 		ChatMessage saved = ChatMessage.builder().id(1L).sessionId("uuid-1").role("user").content("Hello").build();
 		when(chatMessageService.saveMessage(any())).thenReturn(saved);
 
-		ResponseEntity<ChatMessage> result = chatController.saveMessage("uuid-1", dto);
+		ResponseEntity<ChatMessage> result = chatController.saveMessage("uuid-1", dto, authentication);
 
 		assertEquals(200, result.getStatusCode().value());
 		assertEquals("Hello", result.getBody().getContent());
@@ -293,7 +302,7 @@ class ChatControllerTest {
 			.build();
 		when(chatMessageService.saveMessage(any())).thenReturn(saved);
 
-		chatController.saveMessage("uuid-1", dto);
+		chatController.saveMessage("uuid-1", dto, authentication);
 
 		verify(sessionTitleService).scheduleTitleGeneration("uuid-1", "What is AI?");
 	}
@@ -305,7 +314,7 @@ class ChatControllerTest {
 		dto.setContent("test");
 		when(chatMessageService.saveMessage(any())).thenThrow(new RuntimeException("save error"));
 
-		ResponseEntity<ChatMessage> result = chatController.saveMessage("uuid-1", dto);
+		ResponseEntity<ChatMessage> result = chatController.saveMessage("uuid-1", dto, authentication);
 
 		assertEquals(500, result.getStatusCode().value());
 	}
@@ -315,7 +324,7 @@ class ChatControllerTest {
 		when(reportTemplateUtil.getHeader()).thenReturn("<html>");
 		when(reportTemplateUtil.getFooter()).thenReturn("</html>");
 
-		ResponseEntity<byte[]> result = chatController.convertAndDownloadHtml("uuid-1", "content");
+		ResponseEntity<byte[]> result = chatController.convertAndDownloadHtml("uuid-1", "content", authentication);
 
 		String disposition = result.getHeaders().getContentDisposition().toString();
 		assertTrue(disposition.contains("report_"));

@@ -17,12 +17,15 @@ package com.alibaba.cloud.ai.dataagent.controller;
 
 import com.alibaba.cloud.ai.dataagent.entity.AgentPresetQuestion;
 import com.alibaba.cloud.ai.dataagent.service.agent.AgentPresetQuestionService;
+import com.alibaba.cloud.ai.dataagent.service.auth.ResourceOwnershipService;
+import com.alibaba.cloud.ai.dataagent.support.AuthenticationTestSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 
 import java.util.List;
 import java.util.Map;
@@ -37,11 +40,16 @@ class AgentPresetQuestionControllerTest {
 	@Mock
 	private AgentPresetQuestionService presetQuestionService;
 
+	@Mock
+	private ResourceOwnershipService ownershipService;
+
 	private AgentPresetQuestionController controller;
+
+	private final Authentication authentication = AuthenticationTestSupport.user();
 
 	@BeforeEach
 	void setUp() {
-		controller = new AgentPresetQuestionController(presetQuestionService);
+		controller = new AgentPresetQuestionController(presetQuestionService, ownershipService);
 	}
 
 	@Test
@@ -49,7 +57,7 @@ class AgentPresetQuestionControllerTest {
 		AgentPresetQuestion q = new AgentPresetQuestion(1L, "What is revenue?", 1);
 		when(presetQuestionService.findAllByAgentId(1L)).thenReturn(List.of(q));
 
-		ResponseEntity<List<AgentPresetQuestion>> result = controller.getPresetQuestions(1L);
+		ResponseEntity<List<AgentPresetQuestion>> result = controller.getPresetQuestions(1L, authentication);
 
 		assertEquals(200, result.getStatusCode().value());
 		assertEquals(1, result.getBody().size());
@@ -60,7 +68,7 @@ class AgentPresetQuestionControllerTest {
 	void getPresetQuestions_serviceThrows_returns500() {
 		when(presetQuestionService.findAllByAgentId(1L)).thenThrow(new RuntimeException("db error"));
 
-		ResponseEntity<List<AgentPresetQuestion>> result = controller.getPresetQuestions(1L);
+		ResponseEntity<List<AgentPresetQuestion>> result = controller.getPresetQuestions(1L, authentication);
 
 		assertEquals(500, result.getStatusCode().value());
 	}
@@ -69,7 +77,7 @@ class AgentPresetQuestionControllerTest {
 	void savePresetQuestions_success_returnsOk() {
 		List<Map<String, Object>> data = List.of(Map.of("question", "Test?", "isActive", true));
 
-		ResponseEntity<Map<String, String>> result = controller.savePresetQuestions(1L, data);
+		ResponseEntity<Map<String, String>> result = controller.savePresetQuestions(1L, data, authentication);
 
 		assertEquals(200, result.getStatusCode().value());
 		verify(presetQuestionService).batchSave(eq(1L), anyList());
@@ -79,7 +87,7 @@ class AgentPresetQuestionControllerTest {
 	void savePresetQuestions_booleanStringIsActive_parsesCorrectly() {
 		List<Map<String, Object>> data = List.of(Map.of("question", "Test?", "isActive", "true"));
 
-		ResponseEntity<Map<String, String>> result = controller.savePresetQuestions(1L, data);
+		ResponseEntity<Map<String, String>> result = controller.savePresetQuestions(1L, data, authentication);
 
 		assertEquals(200, result.getStatusCode().value());
 		verify(presetQuestionService).batchSave(eq(1L), anyList());
@@ -92,7 +100,7 @@ class AgentPresetQuestionControllerTest {
 		questionData.put("isActive", null);
 		List<Map<String, Object>> data = List.of(questionData);
 
-		ResponseEntity<Map<String, String>> result = controller.savePresetQuestions(1L, data);
+		ResponseEntity<Map<String, String>> result = controller.savePresetQuestions(1L, data, authentication);
 
 		assertEquals(200, result.getStatusCode().value());
 		verify(presetQuestionService).batchSave(eq(1L), anyList());
@@ -103,7 +111,7 @@ class AgentPresetQuestionControllerTest {
 		List<Map<String, Object>> data = List.of(Map.of("question", "Test?", "isActive", true));
 		doThrow(new RuntimeException("db error")).when(presetQuestionService).batchSave(eq(1L), anyList());
 
-		ResponseEntity<Map<String, String>> result = controller.savePresetQuestions(1L, data);
+		ResponseEntity<Map<String, String>> result = controller.savePresetQuestions(1L, data, authentication);
 
 		assertEquals(500, result.getStatusCode().value());
 		assertTrue(result.getBody().containsKey("error"));
@@ -111,7 +119,7 @@ class AgentPresetQuestionControllerTest {
 
 	@Test
 	void deletePresetQuestion_success_returnsOk() {
-		ResponseEntity<Map<String, String>> result = controller.deletePresetQuestion(1L, 10L);
+		ResponseEntity<Map<String, String>> result = controller.deletePresetQuestion(1L, 10L, authentication);
 
 		assertEquals(200, result.getStatusCode().value());
 		verify(presetQuestionService).deleteById(10L);
@@ -121,7 +129,7 @@ class AgentPresetQuestionControllerTest {
 	void deletePresetQuestion_serviceThrows_returns500() {
 		doThrow(new RuntimeException("db error")).when(presetQuestionService).deleteById(10L);
 
-		ResponseEntity<Map<String, String>> result = controller.deletePresetQuestion(1L, 10L);
+		ResponseEntity<Map<String, String>> result = controller.deletePresetQuestion(1L, 10L, authentication);
 
 		assertEquals(500, result.getStatusCode().value());
 		assertTrue(result.getBody().containsKey("error"));

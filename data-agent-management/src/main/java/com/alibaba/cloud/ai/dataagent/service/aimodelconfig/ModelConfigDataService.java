@@ -25,16 +25,30 @@ public interface ModelConfigDataService {
 
 	ModelConfig findById(Integer id);
 
+	ModelConfig findById(Integer id, Long userId);
+
 	void switchActiveStatus(Integer id, ModelType type);
+
+	void switchActiveStatus(Integer id, ModelType type, Long userId);
 
 	List<ModelConfigDTO> listConfigs();
 
+	List<ModelConfigDTO> listConfigs(Long userId);
+
 	void addConfig(ModelConfigDTO dto);
+
+	void addConfig(ModelConfigDTO dto, Long userId);
 
 	ModelConfig updateConfigInDb(ModelConfigDTO dto);
 
+	ModelConfig updateConfigInDb(ModelConfigDTO dto, Long userId);
+
 	void deleteConfig(Integer id);
 
+	void deleteConfig(Integer id, Long userId);
+
 	ModelConfigDTO getActiveConfigByType(ModelType modelType);
+
+	ModelConfigDTO getActiveConfigByType(ModelType modelType, Long userId);
 
 }

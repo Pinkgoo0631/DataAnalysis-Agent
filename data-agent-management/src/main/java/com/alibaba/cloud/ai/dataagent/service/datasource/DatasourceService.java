@@ -27,15 +27,21 @@ public interface DatasourceService {
 	 */
 	List<Datasource> getAllDatasource();
 
+	List<Datasource> getAllDatasource(Long userId);
+
 	/**
 	 * Get data source list by status
 	 */
 	List<Datasource> getDatasourceByStatus(String status);
 
+	List<Datasource> getDatasourceByStatus(String status, Long userId);
+
 	/**
 	 * Get data source list by type
 	 */
 	List<Datasource> getDatasourceByType(String type);
+
+	List<Datasource> getDatasourceByType(String type, Long userId);
 
 	/**
 	 * Get data source details by ID
@@ -46,6 +52,8 @@ public interface DatasourceService {
 	 * Create data source
 	 */
 	Datasource createDatasource(Datasource datasource);
+
+	Datasource createDatasource(Datasource datasource, Long userId);
 
 	/**
 	 * Update data source

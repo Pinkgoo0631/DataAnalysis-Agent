@@ -24,6 +24,9 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.stereotype.Component;
 
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -37,6 +40,30 @@ public class AiModelRegistry {
 	private volatile ChatClient currentChatClient;
 
 	private volatile EmbeddingModel currentEmbeddingModel;
+
+	private final ConcurrentMap<Long, ChatClient> userChatClients = new ConcurrentHashMap<>();
+
+	private final ConcurrentMap<Long, EmbeddingModel> userEmbeddingModels = new ConcurrentHashMap<>();
+
+	public ChatClient getChatClient(Long userId) {
+		return userChatClients.computeIfAbsent(userId, id -> {
+			ModelConfigDTO config = modelConfigDataService.getActiveConfigByType(ModelType.CHAT, id);
+			if (config == null) {
+				throw new IllegalStateException("No active CHAT model configured for the current user.");
+			}
+			return ChatClient.builder(modelFactory.createChatModel(config)).build();
+		});
+	}
+
+	public EmbeddingModel getEmbeddingModel(Long userId) {
+		return userEmbeddingModels.computeIfAbsent(userId, id -> {
+			ModelConfigDTO config = modelConfigDataService.getActiveConfigByType(ModelType.EMBEDDING, id);
+			if (config == null) {
+				throw new IllegalStateException("No active EMBEDDING model configured for the current user.");
+			}
+			return modelFactory.createEmbeddingModel(config);
+		});
+	}
 
 	// =========================================================
 	// 1. 获取 ChatClient (懒加载 + 缓存)
@@ -108,6 +135,16 @@ public class AiModelRegistry {
 	public void refreshEmbedding() {
 		this.currentEmbeddingModel = null;
 		log.info("Embedding cache cleared.");
+	}
+
+	public void refreshChat(Long userId) {
+		userChatClients.remove(userId);
+		log.info("Chat cache cleared for user {}.", userId);
+	}
+
+	public void refreshEmbedding(Long userId) {
+		userEmbeddingModels.remove(userId);
+		log.info("Embedding cache cleared for user {}.", userId);
 	}
 
 }

@@ -198,7 +198,7 @@
 							@click="editKnowledge(item)"
 						/>
 						<v-btn
-							v-if="item.embeddingStatus === 'FAILED'"
+							v-if="item.embeddingStatus === 'FAILED' && item.isRecall"
 							size="small"
 							variant="text"
 							color="orange-darken-1"
@@ -333,6 +333,18 @@
 								hide-details="auto"
 							/>
 						</div>
+
+						<div class="mb-2">
+							<p class="text-body-2 font-weight-medium text-grey-darken-2 mb-2">
+								是否召回
+							</p>
+							<v-switch
+								v-model="knowledgeForm.isRecall"
+								color="blue-darken-3"
+								hide-details
+								:label="knowledgeForm.isRecall ? '召回中（将参与检索）' : '未召回（不参与检索）'"
+							/>
+						</div>
 					</v-form>
 				</v-card-text>
 
@@ -424,7 +436,7 @@ const {
 		businessTerm: '',
 		description: '',
 		synonyms: '',
-		isRecall: false,
+		isRecall: true,
 		agentId: agentId.value,
 	}),
 });
@@ -505,6 +517,7 @@ async function saveKnowledge() {
 		businessTerm: knowledgeForm.value.businessTerm,
 		description: knowledgeForm.value.description,
 		synonyms: knowledgeForm.value.synonyms,
+		isRecall: knowledgeForm.value.isRecall,
 		agentId: agentId.value,
 	};
 	const ok = await saveItem(createData, updateData, currentEditId.value);

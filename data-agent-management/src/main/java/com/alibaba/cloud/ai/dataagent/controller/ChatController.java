@@ -21,6 +21,7 @@ import com.alibaba.cloud.ai.dataagent.entity.ChatSession;
 import com.alibaba.cloud.ai.dataagent.service.chat.ChatMessageService;
 import com.alibaba.cloud.ai.dataagent.service.chat.ChatSessionService;
 import com.alibaba.cloud.ai.dataagent.service.chat.SessionTitleService;
+import com.alibaba.cloud.ai.dataagent.service.auth.ResourceOwnershipService;
 import com.alibaba.cloud.ai.dataagent.util.ReportTemplateUtil;
 import com.alibaba.cloud.ai.dataagent.vo.ApiResponse;
 import java.nio.charset.StandardCharsets;
@@ -31,6 +32,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
@@ -43,7 +45,6 @@ import java.util.Map;
 @Slf4j
 @RestController
 @RequestMapping("/api")
-@CrossOrigin(origins = "*")
 @RequiredArgsConstructor
 public class ChatController {
 
@@ -55,12 +56,17 @@ public class ChatController {
 
 	private final ReportTemplateUtil reportTemplateUtil;
 
+	private final ResourceOwnershipService ownershipService;
+
 	/**
 	 * Get session list for an agent
 	 */
 	@GetMapping("/agent/{id}/sessions")
-	public ResponseEntity<List<ChatSession>> getAgentSessions(@PathVariable(value = "id") Integer id) {
-		List<ChatSession> sessions = chatSessionService.findByAgentId(id);
+	public ResponseEntity<List<ChatSession>> getAgentSessions(@PathVariable(value = "id") Integer id,
+			Authentication authentication) {
+		ownershipService.requireAgent(id.longValue(), authentication);
+		List<ChatSession> sessions = chatSessionService.findByAgentId(id).stream()
+			.filter(session -> ownershipService.userId(authentication).equals(session.getUserId())).toList();
 		return ResponseEntity.ok(sessions);
 	}
 
@@ -69,9 +75,10 @@ public class ChatController {
 	 */
 	@PostMapping("/agent/{id}/sessions")
 	public ResponseEntity<ChatSession> createSession(@PathVariable(value = "id") Integer id,
-			@RequestBody(required = false) Map<String, Object> request) {
+			@RequestBody(required = false) Map<String, Object> request, Authentication authentication) {
+		ownershipService.requireAgent(id.longValue(), authentication);
 		String title = request != null ? (String) request.get("title") : null;
-		Long userId = request != null ? toUserId(request.get("userId")) : null;
+		Long userId = ownershipService.userId(authentication);
 
 		ChatSession session = chatSessionService.createSession(id, title, userId);
 		return ResponseEntity.ok(session);
@@ -85,7 +92,9 @@ public class ChatController {
 	 * Clear all sessions for an agent
 	 */
 	@DeleteMapping("/agent/{id}/sessions")
-	public ResponseEntity<ApiResponse> clearAgentSessions(@PathVariable(value = "id") Integer id) {
+	public ResponseEntity<ApiResponse> clearAgentSessions(@PathVariable(value = "id") Integer id,
+			Authentication authentication) {
+		ownershipService.requireAgent(id.longValue(), authentication);
 		chatSessionService.clearSessionsByAgentId(id);
 		return ResponseEntity.ok(ApiResponse.success("会话已清空"));
 	}
@@ -94,7 +103,9 @@ public class ChatController {
 	 * Get message list for a session
 	 */
 	@GetMapping("/sessions/{sessionId}/messages")
-	public ResponseEntity<List<ChatMessage>> getSessionMessages(@PathVariable(value = "sessionId") String sessionId) {
+	public ResponseEntity<List<ChatMessage>> getSessionMessages(@PathVariable(value = "sessionId") String sessionId,
+			Authentication authentication) {
+		ownershipService.requireSession(sessionId, authentication);
 		List<ChatMessage> messages = chatMessageService.findBySessionId(sessionId);
 		return ResponseEntity.ok(messages);
 	}
@@ -104,8 +115,9 @@ public class ChatController {
 	 */
 	@PostMapping("/sessions/{sessionId}/messages")
 	public ResponseEntity<ChatMessage> saveMessage(@PathVariable(value = "sessionId") String sessionId,
-			@RequestBody ChatMessageDTO request) {
+			@RequestBody ChatMessageDTO request, Authentication authentication) {
 		try {
+			ownershipService.requireSession(sessionId, authentication);
 			if (request == null) {
 				return ResponseEntity.badRequest().build();
 			}
@@ -139,7 +151,8 @@ public class ChatController {
 	 */
 	@PutMapping("/sessions/{sessionId}/pin")
 	public ResponseEntity<ApiResponse> pinSession(@PathVariable(value = "sessionId") String sessionId,
-			@RequestParam(value = "isPinned") Boolean isPinned) {
+			@RequestParam(value = "isPinned") Boolean isPinned, Authentication authentication) {
+		ownershipService.requireSession(sessionId, authentication);
 		try {
 			chatSessionService.pinSession(sessionId, isPinned);
 			String message = isPinned ? "会话已置顶" : "会话已取消置顶";
@@ -156,7 +169,8 @@ public class ChatController {
 	 */
 	@PutMapping("/sessions/{sessionId}/rename")
 	public ResponseEntity<ApiResponse> renameSession(@PathVariable(value = "sessionId") String sessionId,
-			@RequestParam(value = "title") String title) {
+			@RequestParam(value = "title") String title, Authentication authentication) {
+		ownershipService.requireSession(sessionId, authentication);
 		try {
 			if (!StringUtils.hasText(title)) {
 				return ResponseEntity.badRequest().body(ApiResponse.error("标题不能为空"));
@@ -175,7 +189,9 @@ public class ChatController {
 	 * Delete a single session
 	 */
 	@DeleteMapping("/sessions/{sessionId}")
-	public ResponseEntity<ApiResponse> deleteSession(@PathVariable(value = "sessionId") String sessionId) {
+	public ResponseEntity<ApiResponse> deleteSession(@PathVariable(value = "sessionId") String sessionId,
+			Authentication authentication) {
+		ownershipService.requireSession(sessionId, authentication);
 		try {
 			chatSessionService.deleteSession(sessionId);
 			return ResponseEntity.ok(ApiResponse.success("会话已删除"));
@@ -191,7 +207,8 @@ public class ChatController {
 	 */
 	@PostMapping("/sessions/{sessionId}/reports/html")
 	public ResponseEntity<byte[]> convertAndDownloadHtml(@PathVariable(value = "sessionId") String sessionId,
-			@RequestBody String content) {
+			@RequestBody String content, Authentication authentication) {
+		ownershipService.requireSession(sessionId, authentication);
 		try {
 			if (!StringUtils.hasText(content)) {
 				return ResponseEntity.badRequest().build();

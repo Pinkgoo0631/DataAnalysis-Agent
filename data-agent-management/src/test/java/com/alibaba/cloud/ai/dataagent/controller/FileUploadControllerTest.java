@@ -17,6 +17,8 @@ package com.alibaba.cloud.ai.dataagent.controller;
 
 import com.alibaba.cloud.ai.dataagent.properties.FileStorageProperties;
 import com.alibaba.cloud.ai.dataagent.service.file.FileStorageService;
+import com.alibaba.cloud.ai.dataagent.service.auth.ResourceOwnershipService;
+import com.alibaba.cloud.ai.dataagent.support.AuthenticationTestSupport;
 import com.alibaba.cloud.ai.dataagent.vo.UploadResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,6 +30,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.codec.multipart.FilePart;
+import org.springframework.security.core.Authentication;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
@@ -47,11 +50,17 @@ class FileUploadControllerTest {
 	@Mock
 	private FileStorageService fileStorageService;
 
+	@Mock
+	private ResourceOwnershipService ownershipService;
+
 	private FileUploadController controller;
+
+	private final Authentication authentication = AuthenticationTestSupport.user();
 
 	@BeforeEach
 	void setUp() {
-		controller = new FileUploadController(fileStorageProperties, fileStorageService);
+		controller = new FileUploadController(fileStorageProperties, fileStorageService, ownershipService);
+		lenient().when(ownershipService.userId(authentication)).thenReturn(1L);
 	}
 
 	@Test
@@ -61,7 +70,7 @@ class FileUploadControllerTest {
 		headers.setContentType(MediaType.APPLICATION_JSON);
 		when(filePart.headers()).thenReturn(headers);
 
-		Mono<ResponseEntity<UploadResponse>> result = controller.uploadAvatar(filePart);
+		Mono<ResponseEntity<UploadResponse>> result = controller.uploadAvatar(filePart, authentication);
 
 		StepVerifier.create(result).assertNext(response -> {
 			assertEquals(400, response.getStatusCode().value());
@@ -75,7 +84,7 @@ class FileUploadControllerTest {
 		HttpHeaders headers = new HttpHeaders();
 		when(filePart.headers()).thenReturn(headers);
 
-		Mono<ResponseEntity<UploadResponse>> result = controller.uploadAvatar(filePart);
+		Mono<ResponseEntity<UploadResponse>> result = controller.uploadAvatar(filePart, authentication);
 
 		StepVerifier.create(result).assertNext(response -> {
 			assertEquals(400, response.getStatusCode().value());
@@ -91,7 +100,7 @@ class FileUploadControllerTest {
 		when(filePart.headers()).thenReturn(headers);
 		when(fileStorageProperties.getImageSize()).thenReturn(2L * 1024 * 1024);
 
-		Mono<ResponseEntity<UploadResponse>> result = controller.uploadAvatar(filePart);
+		Mono<ResponseEntity<UploadResponse>> result = controller.uploadAvatar(filePart, authentication);
 
 		StepVerifier.create(result).assertNext(response -> {
 			assertEquals(400, response.getStatusCode().value());
@@ -107,15 +116,17 @@ class FileUploadControllerTest {
 		headers.setContentLength(1024);
 		when(filePart.headers()).thenReturn(headers);
 		when(fileStorageProperties.getImageSize()).thenReturn(2L * 1024 * 1024);
-		when(fileStorageService.storeFile(filePart, "avatars")).thenReturn(Mono.just("avatars/test.png"));
-		when(fileStorageService.getFileUrl("avatars/test.png")).thenReturn("/uploads/avatars/test.png");
+		when(fileStorageService.storeFile(filePart, "users/1/avatars"))
+			.thenReturn(Mono.just("users/1/avatars/test.png"));
+		when(fileStorageService.getFileUrl("users/1/avatars/test.png"))
+			.thenReturn("/uploads/users/1/avatars/test.png");
 
-		Mono<ResponseEntity<UploadResponse>> result = controller.uploadAvatar(filePart);
+		Mono<ResponseEntity<UploadResponse>> result = controller.uploadAvatar(filePart, authentication);
 
 		StepVerifier.create(result).assertNext(response -> {
 			assertEquals(200, response.getStatusCode().value());
 			assertTrue(response.getBody().isSuccess());
-			assertEquals("/uploads/avatars/test.png", response.getBody().getUrl());
+			assertEquals("/uploads/users/1/avatars/test.png", response.getBody().getUrl());
 			assertEquals("test.png", response.getBody().getFilename());
 		}).verifyComplete();
 	}

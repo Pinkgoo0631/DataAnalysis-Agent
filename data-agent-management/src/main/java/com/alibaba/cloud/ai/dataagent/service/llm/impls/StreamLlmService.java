@@ -16,6 +16,7 @@
 package com.alibaba.cloud.ai.dataagent.service.llm.impls;
 
 import com.alibaba.cloud.ai.dataagent.service.aimodelconfig.AiModelRegistry;
+import com.alibaba.cloud.ai.dataagent.service.aimodelconfig.ModelUserContext;
 import com.alibaba.cloud.ai.dataagent.service.llm.LlmService;
 import lombok.AllArgsConstructor;
 import org.springframework.ai.chat.client.advisor.StructuredOutputValidationAdvisor;
@@ -31,7 +32,7 @@ public class StreamLlmService implements LlmService {
 
 	@Override
 	public Flux<ChatResponse> call(String system, String user) {
-		return registry.getChatClient().prompt().system(system).user(user).stream().chatResponse();
+		return Flux.deferContextual(context -> chatClient(context).prompt().system(system).user(user).stream().chatResponse());
 	}
 
 	@Override
@@ -40,8 +41,8 @@ public class StreamLlmService implements LlmService {
 			.outputType(outputType)
 			.maxRepeatAttempts(2)
 			.build();
-		return Mono
-			.fromCallable(() -> registry.getChatClient()
+		return Flux.deferContextual(context -> Mono
+			.fromCallable(() -> chatClient(context)
 				.prompt()
 				.system(system)
 				.user(user)
@@ -49,17 +50,17 @@ public class StreamLlmService implements LlmService {
 				.call()
 				.chatResponse())
 			.subscribeOn(Schedulers.boundedElastic())
-			.flux();
+			.flux());
 	}
 
 	@Override
 	public Flux<ChatResponse> callSystem(String system) {
-		return registry.getChatClient().prompt().system(system).stream().chatResponse();
+		return Flux.deferContextual(context -> chatClient(context).prompt().system(system).stream().chatResponse());
 	}
 
 	@Override
 	public Flux<ChatResponse> callUser(String user) {
-		return registry.getChatClient().prompt().user(user).stream().chatResponse();
+		return Flux.deferContextual(context -> chatClient(context).prompt().user(user).stream().chatResponse());
 	}
 
 	@Override
@@ -68,10 +69,15 @@ public class StreamLlmService implements LlmService {
 			.outputType(outputType)
 			.maxRepeatAttempts(2)
 			.build();
-		return Mono
-			.fromCallable(() -> registry.getChatClient().prompt().user(user).advisors(advisor).call().chatResponse())
+		return Flux.deferContextual(context -> Mono
+			.fromCallable(() -> chatClient(context).prompt().user(user).advisors(advisor).call().chatResponse())
 			.subscribeOn(Schedulers.boundedElastic())
-			.flux();
+			.flux());
+	}
+
+	private org.springframework.ai.chat.client.ChatClient chatClient(reactor.util.context.ContextView context) {
+		return context.hasKey(ModelUserContext.USER_ID)
+				? registry.getChatClient(context.get(ModelUserContext.USER_ID)) : registry.getChatClient();
 	}
 
 }

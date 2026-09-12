@@ -59,8 +59,18 @@ public class AgentServiceImpl implements AgentService {
 	}
 
 	@Override
+	public List<Agent> findAll(Long userId) {
+		return agentMapper.findAllByUserId(userId);
+	}
+
+	@Override
 	public Agent findById(Long id) {
 		return agentMapper.findById(id);
+	}
+
+	@Override
+	public Agent findById(Long id, Long userId) {
+		return agentMapper.findByIdAndUserId(id, userId);
 	}
 
 	@Override
@@ -69,8 +79,18 @@ public class AgentServiceImpl implements AgentService {
 	}
 
 	@Override
+	public List<Agent> findByStatus(String status, Long userId) {
+		return agentMapper.findByStatusAndUserId(status, userId);
+	}
+
+	@Override
 	public List<Agent> search(String keyword) {
 		return agentMapper.searchByKeyword(keyword);
+	}
+
+	@Override
+	public List<Agent> search(String keyword, Long userId) {
+		return agentMapper.searchByKeywordAndUserId(keyword, userId);
 	}
 
 	@Override
@@ -97,6 +117,16 @@ public class AgentServiceImpl implements AgentService {
 		}
 
 		return agent;
+	}
+
+	@Override
+	public Agent save(Agent agent, Long userId) {
+		if (agent.getId() != null && agentMapper.findByIdAndUserId(agent.getId(), userId) == null) {
+			throw new IllegalArgumentException("Agent not found: " + agent.getId());
+		}
+		agent.setUserId(userId);
+		agent.setAdminId(userId);
+		return save(agent);
 	}
 
 	@Override

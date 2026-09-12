@@ -17,6 +17,7 @@ package com.alibaba.cloud.ai.dataagent.controller;
 
 import com.alibaba.cloud.ai.dataagent.entity.Agent;
 import com.alibaba.cloud.ai.dataagent.service.agent.AgentService;
+import com.alibaba.cloud.ai.dataagent.support.AuthenticationTestSupport;
 import com.alibaba.cloud.ai.dataagent.vo.ApiKeyResponse;
 import com.alibaba.cloud.ai.dataagent.vo.ApiResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,6 +26,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.security.core.Authentication;
 
 import java.util.List;
 
@@ -40,6 +42,8 @@ class AgentControllerTest {
 
 	private AgentController agentController;
 
+	private final Authentication authentication = AuthenticationTestSupport.user();
+
 	@BeforeEach
 	void setUp() {
 		agentController = new AgentController(agentService);
@@ -49,23 +53,23 @@ class AgentControllerTest {
 	void createAgent_validRequest_returnsCreatedAgent() {
 		Agent input = Agent.builder().name("Test Agent").description("A test agent").build();
 		Agent saved = Agent.builder().id(1L).name("Test Agent").description("A test agent").status("draft").build();
-		when(agentService.save(any(Agent.class))).thenReturn(saved);
+		when(agentService.save(any(Agent.class), eq(1L))).thenReturn(saved);
 
-		Agent result = agentController.create(input);
+		Agent result = agentController.create(input, authentication);
 
 		assertNotNull(result);
 		assertEquals(1L, result.getId());
 		assertEquals("Test Agent", result.getName());
 		assertEquals("draft", result.getStatus());
-		verify(agentService).save(any(Agent.class));
+		verify(agentService).save(any(Agent.class), eq(1L));
 	}
 
 	@Test
 	void getAgent_existingId_returnsAgent() {
 		Agent agent = Agent.builder().id(1L).name("Test Agent").build();
-		when(agentService.findById(1L)).thenReturn(agent);
+		when(agentService.findById(1L, 1L)).thenReturn(agent);
 
-		Agent result = agentController.get(1L);
+		Agent result = agentController.get(1L, authentication);
 
 		assertNotNull(result);
 		assertEquals(1L, result.getId());
@@ -73,17 +77,17 @@ class AgentControllerTest {
 
 	@Test
 	void getAgent_nonExistingId_throwsNotFoundException() {
-		when(agentService.findById(999L)).thenReturn(null);
+		when(agentService.findById(999L, 1L)).thenReturn(null);
 
-		assertThrows(ResponseStatusException.class, () -> agentController.get(999L));
+		assertThrows(ResponseStatusException.class, () -> agentController.get(999L, authentication));
 	}
 
 	@Test
 	void deleteAgent_existingId_callsDeleteOnService() {
 		Agent agent = Agent.builder().id(1L).name("Test Agent").build();
-		when(agentService.findById(1L)).thenReturn(agent);
+		when(agentService.findById(1L, 1L)).thenReturn(agent);
 
-		agentController.delete(1L);
+		agentController.delete(1L, authentication);
 
 		verify(agentService).deleteById(1L);
 	}
@@ -91,23 +95,23 @@ class AgentControllerTest {
 	@Test
 	void publishAgent_validAgent_updatesStatusToPublished() {
 		Agent agent = Agent.builder().id(1L).name("Test Agent").status("draft").build();
-		when(agentService.findById(1L)).thenReturn(agent);
-		when(agentService.save(any(Agent.class))).thenAnswer(inv -> inv.getArgument(0));
+		when(agentService.findById(1L, 1L)).thenReturn(agent);
+		when(agentService.save(any(Agent.class), eq(1L))).thenAnswer(inv -> inv.getArgument(0));
 
-		Agent result = agentController.publish(1L);
+		Agent result = agentController.publish(1L, authentication);
 
 		assertEquals("published", result.getStatus());
-		verify(agentService).save(any(Agent.class));
+		verify(agentService).save(any(Agent.class), eq(1L));
 	}
 
 	@Test
 	void generateApiKey_validAgent_returnsKeyResponse() {
 		Agent agent = Agent.builder().id(1L).name("Test Agent").build();
 		Agent updated = Agent.builder().id(1L).apiKey("sk-abc123").apiKeyEnabled(1).build();
-		when(agentService.findById(1L)).thenReturn(agent);
+		when(agentService.findById(1L, 1L)).thenReturn(agent);
 		when(agentService.generateApiKey(1L)).thenReturn(updated);
 
-		ApiResponse<ApiKeyResponse> result = agentController.generateApiKey(1L);
+		ApiResponse<ApiKeyResponse> result = agentController.generateApiKey(1L, authentication);
 
 		assertTrue(result.isSuccess());
 		assertEquals("sk-abc123", result.getData().getApiKey());
@@ -117,13 +121,13 @@ class AgentControllerTest {
 	@Test
 	void list_withKeyword_callsSearch() {
 		List<Agent> agents = List.of(Agent.builder().id(1L).name("Sales Agent").build());
-		when(agentService.search("Sales")).thenReturn(agents);
+		when(agentService.search("Sales", 1L)).thenReturn(agents);
 
-		List<Agent> result = agentController.list(null, "Sales");
+		List<Agent> result = agentController.list(null, "Sales", authentication);
 
 		assertEquals(1, result.size());
-		verify(agentService).search("Sales");
-		verify(agentService, never()).findAll();
+		verify(agentService).search("Sales", 1L);
+		verify(agentService, never()).findAll(1L);
 	}
 
 }

@@ -34,6 +34,13 @@ public interface ChatSessionMapper {
 			""")
 	List<ChatSession> selectByAgentId(@Param("agentId") Integer agentId);
 
+	@Select("""
+			SELECT * FROM chat_session
+			WHERE agent_id = #{agentId} AND user_id = #{userId} AND status != 'deleted'
+			ORDER BY is_pinned DESC, update_time DESC
+			""")
+	List<ChatSession> selectByAgentIdAndUserId(@Param("agentId") Integer agentId, @Param("userId") Long userId);
+
 	/**
 	 * Query session details by session ID
 	 */
@@ -42,6 +49,12 @@ public interface ChatSessionMapper {
 			WHERE id = #{sessionId} AND status != 'deleted'
 			""")
 	ChatSession selectBySessionId(@Param("sessionId") String sessionId);
+
+	@Select("""
+			SELECT * FROM chat_session
+			WHERE id = #{sessionId} AND user_id = #{userId} AND status != 'deleted'
+			""")
+	ChatSession selectBySessionIdAndUserId(@Param("sessionId") String sessionId, @Param("userId") Long userId);
 
 	/**
 	 * Update session

@@ -18,6 +18,7 @@ package com.alibaba.cloud.ai.dataagent.controller;
 import com.alibaba.cloud.ai.dataagent.dto.GraphRequest;
 import com.alibaba.cloud.ai.dataagent.enums.GraphEventType;
 import com.alibaba.cloud.ai.dataagent.service.graph.GraphService;
+import com.alibaba.cloud.ai.dataagent.service.auth.ResourceOwnershipService;
 import com.alibaba.cloud.ai.dataagent.vo.GraphNodeResponse;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +26,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.http.server.reactive.ServerHttpResponse;
+import org.springframework.security.core.Authentication;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
@@ -40,11 +42,12 @@ import static com.alibaba.cloud.ai.dataagent.constant.Constant.STREAM_EVENT_ERRO
 @Slf4j
 @RestController
 @AllArgsConstructor
-@CrossOrigin(origins = "*")
 @RequestMapping("/api")
 public class GraphController {
 
 	private final GraphService graphService;
+
+	private final ResourceOwnershipService ownershipService;
 
 	@GetMapping(value = "/stream/search", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
 	public Flux<ServerSentEvent<GraphNodeResponse>> streamSearch(@RequestParam("agentId") String agentId,
@@ -53,7 +56,9 @@ public class GraphController {
 			@RequestParam(value = "humanFeedback", required = false) boolean humanFeedback,
 			@RequestParam(value = "humanFeedbackContent", required = false) String humanFeedbackContent,
 			@RequestParam(value = "rejectedPlan", required = false) boolean rejectedPlan,
-			@RequestParam(value = "nl2sqlOnly", required = false) boolean nl2sqlOnly, ServerHttpResponse response) {
+			@RequestParam(value = "nl2sqlOnly", required = false) boolean nl2sqlOnly, ServerHttpResponse response,
+			Authentication authentication) {
+		var authorizedAgent = ownershipService.requireAgentAccess(Long.valueOf(agentId), authentication);
 		// Set SSE-related HTTP headers
 		response.getHeaders().add("Cache-Control", "no-cache");
 		response.getHeaders().add("Connection", "keep-alive");
@@ -63,6 +68,7 @@ public class GraphController {
 
 		GraphRequest request = GraphRequest.builder()
 			.agentId(agentId)
+			.userId(authorizedAgent.getUserId())
 			.conversationId(conversationId)
 			.threadId(threadId)
 			.query(query)
@@ -105,7 +111,8 @@ public class GraphController {
 
 	@PostMapping("/stream/stop")
 	public ResponseEntity<Void> stopStream(@RequestParam("conversationId") String conversationId,
-			@RequestParam(value = "threadId", required = false) String threadId) {
+			@RequestParam(value = "threadId", required = false) String threadId, Authentication authentication) {
+		ownershipService.requireSession(conversationId, authentication);
 		if (StringUtils.hasText(threadId)) {
 			graphService.stopStreamProcessing(threadId);
 		}

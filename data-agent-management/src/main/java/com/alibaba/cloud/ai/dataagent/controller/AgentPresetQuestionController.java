@@ -17,10 +17,12 @@ package com.alibaba.cloud.ai.dataagent.controller;
 
 import com.alibaba.cloud.ai.dataagent.entity.AgentPresetQuestion;
 import com.alibaba.cloud.ai.dataagent.service.agent.AgentPresetQuestionService;
+import com.alibaba.cloud.ai.dataagent.service.auth.ResourceOwnershipService;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.Authentication;
 
 import java.util.List;
 import java.util.Map;
@@ -28,18 +30,21 @@ import java.util.Map;
 @Slf4j
 @RestController
 @RequestMapping("/api/agent")
-@CrossOrigin(origins = "*")
 @AllArgsConstructor
 // todo: 部分返回值和参数需要定义DTO
 public class AgentPresetQuestionController {
 
 	private final AgentPresetQuestionService presetQuestionService;
 
+	private final ResourceOwnershipService ownershipService;
+
 	/**
 	 * Get preset question list of agent
 	 */
 	@GetMapping("/{agentId}/preset-questions")
-	public ResponseEntity<List<AgentPresetQuestion>> getPresetQuestions(@PathVariable(value = "agentId") Long agentId) {
+	public ResponseEntity<List<AgentPresetQuestion>> getPresetQuestions(@PathVariable(value = "agentId") Long agentId,
+			Authentication authentication) {
+		ownershipService.requireAgent(agentId, authentication);
 		try {
 			List<AgentPresetQuestion> questions = presetQuestionService.findAllByAgentId(agentId);
 			return ResponseEntity.ok(questions);
@@ -55,7 +60,8 @@ public class AgentPresetQuestionController {
 	 */
 	@PostMapping("/{agentId}/preset-questions")
 	public ResponseEntity<Map<String, String>> savePresetQuestions(@PathVariable(value = "agentId") Long agentId,
-			@RequestBody List<Map<String, Object>> questionsData) {
+			@RequestBody List<Map<String, Object>> questionsData, Authentication authentication) {
+		ownershipService.requireAgent(agentId, authentication);
 		try {
 			List<AgentPresetQuestion> questions = questionsData.stream().map(data -> {
 				AgentPresetQuestion question = new AgentPresetQuestion();
@@ -87,7 +93,8 @@ public class AgentPresetQuestionController {
 	 */
 	@DeleteMapping("/{agentId}/preset-questions/{questionId}")
 	public ResponseEntity<Map<String, String>> deletePresetQuestion(@PathVariable(value = "agentId") Long agentId,
-			@PathVariable Long questionId) {
+			@PathVariable Long questionId, Authentication authentication) {
+		ownershipService.requireAgent(agentId, authentication);
 		try {
 			presetQuestionService.deleteById(questionId);
 			return ResponseEntity.ok(Map.of("message", "预设问题删除成功"));

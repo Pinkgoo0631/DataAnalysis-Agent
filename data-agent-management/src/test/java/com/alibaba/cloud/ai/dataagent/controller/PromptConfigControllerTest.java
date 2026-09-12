@@ -18,6 +18,8 @@ package com.alibaba.cloud.ai.dataagent.controller;
 import com.alibaba.cloud.ai.dataagent.dto.prompt.PromptConfigDTO;
 import com.alibaba.cloud.ai.dataagent.entity.UserPromptConfig;
 import com.alibaba.cloud.ai.dataagent.service.prompt.UserPromptService;
+import com.alibaba.cloud.ai.dataagent.service.auth.ResourceOwnershipService;
+import com.alibaba.cloud.ai.dataagent.support.AuthenticationTestSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,6 +29,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 
 import java.util.List;
 import java.util.Map;
@@ -42,22 +45,29 @@ class PromptConfigControllerTest {
 	@Mock
 	private UserPromptService promptConfigService;
 
+	@Mock
+	private ResourceOwnershipService ownershipService;
+
 	@InjectMocks
 	private PromptConfigController controller;
 
 	private UserPromptConfig testConfig;
 
+	private final Authentication authentication = AuthenticationTestSupport.user();
+
 	@BeforeEach
 	void setUp() {
 		testConfig = new UserPromptConfig();
+		when(ownershipService.userId(authentication)).thenReturn(1L);
+		when(promptConfigService.getConfigById(anyString(), eq(1L))).thenReturn(testConfig);
 	}
 
 	@Test
 	void saveConfig_success() {
 		PromptConfigDTO dto = new PromptConfigDTO("1", "test", "planner", 1L, "prompt", true, "desc", "admin", 1, 1);
-		when(promptConfigService.saveOrUpdateConfig(dto)).thenReturn(testConfig);
+		when(promptConfigService.saveOrUpdateConfig(dto, 1L)).thenReturn(testConfig);
 
-		ResponseEntity<Map<String, Object>> response = controller.saveConfig(dto);
+		ResponseEntity<Map<String, Object>> response = controller.saveConfig(dto, authentication);
 
 		assertEquals(200, response.getStatusCode().value());
 		assertTrue((Boolean) response.getBody().get("success"));
@@ -66,9 +76,9 @@ class PromptConfigControllerTest {
 
 	@Test
 	void getConfig_found() {
-		when(promptConfigService.getConfigById("1")).thenReturn(testConfig);
+		when(promptConfigService.getConfigById("1", 1L)).thenReturn(testConfig);
 
-		ResponseEntity<Map<String, Object>> response = controller.getConfig("1");
+		ResponseEntity<Map<String, Object>> response = controller.getConfig("1", authentication);
 
 		assertTrue((Boolean) response.getBody().get("success"));
 		assertNotNull(response.getBody().get("data"));
@@ -76,18 +86,18 @@ class PromptConfigControllerTest {
 
 	@Test
 	void getConfig_notFound() {
-		when(promptConfigService.getConfigById("999")).thenReturn(null);
+		when(promptConfigService.getConfigById("999", 1L)).thenReturn(null);
 
-		ResponseEntity<Map<String, Object>> response = controller.getConfig("999");
+		ResponseEntity<Map<String, Object>> response = controller.getConfig("999", authentication);
 
 		assertFalse((Boolean) response.getBody().get("success"));
 	}
 
 	@Test
 	void getAllConfigs_returnsListWithTotal() {
-		when(promptConfigService.getAllConfigs()).thenReturn(List.of(testConfig));
+		when(promptConfigService.getAllConfigs(1L)).thenReturn(List.of(testConfig));
 
-		ResponseEntity<Map<String, Object>> response = controller.getAllConfigs();
+		ResponseEntity<Map<String, Object>> response = controller.getAllConfigs(authentication);
 
 		assertTrue((Boolean) response.getBody().get("success"));
 		assertEquals(1, response.getBody().get("total"));
@@ -95,9 +105,9 @@ class PromptConfigControllerTest {
 
 	@Test
 	void getConfigsByType_withAgentId() {
-		when(promptConfigService.getConfigsByType("planner", 1L)).thenReturn(List.of(testConfig));
+		when(promptConfigService.getConfigsByType("planner", 1L, 1L)).thenReturn(List.of(testConfig));
 
-		ResponseEntity<Map<String, Object>> response = controller.getConfigsByType("planner", 1L);
+		ResponseEntity<Map<String, Object>> response = controller.getConfigsByType("planner", 1L, authentication);
 
 		assertTrue((Boolean) response.getBody().get("success"));
 		assertEquals(1, response.getBody().get("total"));
@@ -105,9 +115,9 @@ class PromptConfigControllerTest {
 
 	@Test
 	void getConfigsByType_withoutAgentId() {
-		when(promptConfigService.getConfigsByType("planner", null)).thenReturn(List.of());
+		when(promptConfigService.getConfigsByType("planner", null, 1L)).thenReturn(List.of());
 
-		ResponseEntity<Map<String, Object>> response = controller.getConfigsByType("planner", null);
+		ResponseEntity<Map<String, Object>> response = controller.getConfigsByType("planner", null, authentication);
 
 		assertTrue((Boolean) response.getBody().get("success"));
 		assertEquals(0, response.getBody().get("total"));
@@ -115,9 +125,9 @@ class PromptConfigControllerTest {
 
 	@Test
 	void getActiveConfig_found() {
-		when(promptConfigService.getActiveConfigByType("planner", 1L)).thenReturn(testConfig);
+		when(promptConfigService.getConfigsByType("planner", 1L, 1L)).thenReturn(List.of(testConfig));
 
-		ResponseEntity<Map<String, Object>> response = controller.getActiveConfig("planner", 1L);
+		ResponseEntity<Map<String, Object>> response = controller.getActiveConfig("planner", 1L, authentication);
 
 		assertTrue((Boolean) response.getBody().get("success"));
 		assertTrue((Boolean) response.getBody().get("hasCustomConfig"));
@@ -125,9 +135,9 @@ class PromptConfigControllerTest {
 
 	@Test
 	void getActiveConfig_notFound() {
-		when(promptConfigService.getActiveConfigByType("planner", null)).thenReturn(null);
+		when(promptConfigService.getConfigsByType("planner", null, 1L)).thenReturn(List.of());
 
-		ResponseEntity<Map<String, Object>> response = controller.getActiveConfig("planner", null);
+		ResponseEntity<Map<String, Object>> response = controller.getActiveConfig("planner", null, authentication);
 
 		assertTrue((Boolean) response.getBody().get("success"));
 		assertFalse((Boolean) response.getBody().get("hasCustomConfig"));
@@ -135,9 +145,10 @@ class PromptConfigControllerTest {
 
 	@Test
 	void getActiveConfigs_withResults() {
-		when(promptConfigService.getActiveConfigsByType("planner", 1L)).thenReturn(List.of(testConfig));
+		testConfig.setEnabled(true);
+		when(promptConfigService.getConfigsByType("planner", 1L, 1L)).thenReturn(List.of(testConfig));
 
-		ResponseEntity<Map<String, Object>> response = controller.getActiveConfigs("planner", 1L);
+		ResponseEntity<Map<String, Object>> response = controller.getActiveConfigs("planner", 1L, authentication);
 
 		assertTrue((Boolean) response.getBody().get("success"));
 		assertTrue((Boolean) response.getBody().get("hasOptimizationConfigs"));
@@ -146,9 +157,9 @@ class PromptConfigControllerTest {
 
 	@Test
 	void getActiveConfigs_empty() {
-		when(promptConfigService.getActiveConfigsByType("planner", 1L)).thenReturn(List.of());
+		when(promptConfigService.getConfigsByType("planner", 1L, 1L)).thenReturn(List.of());
 
-		ResponseEntity<Map<String, Object>> response = controller.getActiveConfigs("planner", 1L);
+		ResponseEntity<Map<String, Object>> response = controller.getActiveConfigs("planner", 1L, authentication);
 
 		assertFalse((Boolean) response.getBody().get("hasOptimizationConfigs"));
 	}
@@ -157,7 +168,7 @@ class PromptConfigControllerTest {
 	void deleteConfig_success() {
 		when(promptConfigService.deleteConfig("1")).thenReturn(true);
 
-		ResponseEntity<Map<String, Object>> response = controller.deleteConfig("1");
+		ResponseEntity<Map<String, Object>> response = controller.deleteConfig("1", authentication);
 
 		assertTrue((Boolean) response.getBody().get("success"));
 	}
@@ -166,7 +177,7 @@ class PromptConfigControllerTest {
 	void deleteConfig_failure() {
 		when(promptConfigService.deleteConfig("999")).thenReturn(false);
 
-		ResponseEntity<Map<String, Object>> response = controller.deleteConfig("999");
+		ResponseEntity<Map<String, Object>> response = controller.deleteConfig("999", authentication);
 
 		assertFalse((Boolean) response.getBody().get("success"));
 	}
@@ -175,7 +186,7 @@ class PromptConfigControllerTest {
 	void enableConfig_success() {
 		when(promptConfigService.enableConfig("1")).thenReturn(true);
 
-		ResponseEntity<Map<String, Object>> response = controller.enableConfig("1");
+		ResponseEntity<Map<String, Object>> response = controller.enableConfig("1", authentication);
 
 		assertTrue((Boolean) response.getBody().get("success"));
 	}
@@ -184,7 +195,7 @@ class PromptConfigControllerTest {
 	void enableConfig_failure() {
 		when(promptConfigService.enableConfig("999")).thenReturn(false);
 
-		ResponseEntity<Map<String, Object>> response = controller.enableConfig("999");
+		ResponseEntity<Map<String, Object>> response = controller.enableConfig("999", authentication);
 
 		assertFalse((Boolean) response.getBody().get("success"));
 	}
@@ -193,7 +204,7 @@ class PromptConfigControllerTest {
 	void disableConfig_success() {
 		when(promptConfigService.disableConfig("1")).thenReturn(true);
 
-		ResponseEntity<Map<String, Object>> response = controller.disableConfig("1");
+		ResponseEntity<Map<String, Object>> response = controller.disableConfig("1", authentication);
 
 		assertTrue((Boolean) response.getBody().get("success"));
 	}
@@ -202,7 +213,7 @@ class PromptConfigControllerTest {
 	void disableConfig_failure() {
 		when(promptConfigService.disableConfig("999")).thenReturn(false);
 
-		ResponseEntity<Map<String, Object>> response = controller.disableConfig("999");
+		ResponseEntity<Map<String, Object>> response = controller.disableConfig("999", authentication);
 
 		assertFalse((Boolean) response.getBody().get("success"));
 	}
@@ -220,7 +231,7 @@ class PromptConfigControllerTest {
 	void batchEnableConfigs_success() {
 		when(promptConfigService.enableConfigs(anyList())).thenReturn(true);
 
-		ResponseEntity<Map<String, Object>> response = controller.batchEnableConfigs(List.of("1", "2"));
+		ResponseEntity<Map<String, Object>> response = controller.batchEnableConfigs(List.of("1", "2"), authentication);
 
 		assertTrue((Boolean) response.getBody().get("success"));
 	}
@@ -229,7 +240,7 @@ class PromptConfigControllerTest {
 	void batchEnableConfigs_failure() {
 		when(promptConfigService.enableConfigs(anyList())).thenReturn(false);
 
-		ResponseEntity<Map<String, Object>> response = controller.batchEnableConfigs(List.of("1"));
+		ResponseEntity<Map<String, Object>> response = controller.batchEnableConfigs(List.of("1"), authentication);
 
 		assertFalse((Boolean) response.getBody().get("success"));
 	}
@@ -238,7 +249,7 @@ class PromptConfigControllerTest {
 	void batchDisableConfigs_success() {
 		when(promptConfigService.disableConfigs(anyList())).thenReturn(true);
 
-		ResponseEntity<Map<String, Object>> response = controller.batchDisableConfigs(List.of("1", "2"));
+		ResponseEntity<Map<String, Object>> response = controller.batchDisableConfigs(List.of("1", "2"), authentication);
 
 		assertTrue((Boolean) response.getBody().get("success"));
 	}
@@ -247,7 +258,7 @@ class PromptConfigControllerTest {
 	void batchDisableConfigs_failure() {
 		when(promptConfigService.disableConfigs(anyList())).thenReturn(false);
 
-		ResponseEntity<Map<String, Object>> response = controller.batchDisableConfigs(List.of("1"));
+		ResponseEntity<Map<String, Object>> response = controller.batchDisableConfigs(List.of("1"), authentication);
 
 		assertFalse((Boolean) response.getBody().get("success"));
 	}
@@ -256,7 +267,7 @@ class PromptConfigControllerTest {
 	void updatePriority_success() {
 		when(promptConfigService.updatePriority("1", 5)).thenReturn(true);
 
-		ResponseEntity<Map<String, Object>> response = controller.updatePriority("1", Map.of("priority", 5));
+		ResponseEntity<Map<String, Object>> response = controller.updatePriority("1", Map.of("priority", 5), authentication);
 
 		assertTrue((Boolean) response.getBody().get("success"));
 	}
@@ -265,7 +276,7 @@ class PromptConfigControllerTest {
 	void updatePriority_failure() {
 		when(promptConfigService.updatePriority("999", 5)).thenReturn(false);
 
-		ResponseEntity<Map<String, Object>> response = controller.updatePriority("999", Map.of("priority", 5));
+		ResponseEntity<Map<String, Object>> response = controller.updatePriority("999", Map.of("priority", 5), authentication);
 
 		assertFalse((Boolean) response.getBody().get("success"));
 	}
@@ -274,7 +285,7 @@ class PromptConfigControllerTest {
 	void updateDisplayOrder_success() {
 		when(promptConfigService.updateDisplayOrder("1", 3)).thenReturn(true);
 
-		ResponseEntity<Map<String, Object>> response = controller.updateDisplayOrder("1", Map.of("displayOrder", 3));
+		ResponseEntity<Map<String, Object>> response = controller.updateDisplayOrder("1", Map.of("displayOrder", 3), authentication);
 
 		assertTrue((Boolean) response.getBody().get("success"));
 	}
@@ -284,7 +295,7 @@ class PromptConfigControllerTest {
 		when(promptConfigService.updateDisplayOrder("999", 3)).thenReturn(false);
 
 		ResponseEntity<Map<String, Object>> response = controller.updateDisplayOrder("999",
-				Map.of("displayOrder", 3));
+				Map.of("displayOrder", 3), authentication);
 
 		assertFalse((Boolean) response.getBody().get("success"));
 	}

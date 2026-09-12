@@ -19,6 +19,7 @@ import com.alibaba.cloud.ai.dataagent.dto.schema.SemanticModelAddDTO;
 import com.alibaba.cloud.ai.dataagent.dto.schema.SemanticModelBatchImportDTO;
 import com.alibaba.cloud.ai.dataagent.entity.SemanticModel;
 import com.alibaba.cloud.ai.dataagent.service.semantic.SemanticModelService;
+import com.alibaba.cloud.ai.dataagent.service.auth.ResourceOwnershipService;
 import com.alibaba.cloud.ai.dataagent.vo.ApiResponse;
 import com.alibaba.cloud.ai.dataagent.vo.BatchImportResult;
 import jakarta.validation.Valid;
@@ -36,6 +37,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
+import org.springframework.security.core.Authentication;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -48,7 +50,6 @@ import java.util.List;
 @Slf4j
 @RestController
 @RequestMapping("/api/semantic-model")
-@CrossOrigin(origins = "*")
 @AllArgsConstructor
 public class SemanticModelController {
 
@@ -56,10 +57,13 @@ public class SemanticModelController {
 
 	private final SemanticModelService semanticModelService;
 
+	private final ResourceOwnershipService ownershipService;
+
 	@GetMapping
 	public ApiResponse<List<SemanticModel>> list(@RequestParam(value = "keyword", required = false) String keyword,
-			@RequestParam(value = "agentId", required = false) Long agentId) {
+			@RequestParam(value = "agentId", required = false) Long agentId, Authentication authentication) {
 		List<SemanticModel> result;
+		if (agentId != null) ownershipService.requireAgent(agentId, authentication);
 		if (keyword != null && !keyword.trim().isEmpty()) {
 			result = semanticModelService.search(keyword);
 		}
@@ -69,17 +73,21 @@ public class SemanticModelController {
 		else {
 			result = semanticModelService.getAll();
 		}
+		result = result.stream().filter(model -> ownershipService.ownsAgent(model.getAgentId(), authentication)).toList();
 		return ApiResponse.success("success list semanticModel", result);
 	}
 
 	@GetMapping("/{id}")
-	public ApiResponse<SemanticModel> get(@PathVariable(value = "id") Long id) {
+	public ApiResponse<SemanticModel> get(@PathVariable(value = "id") Long id, Authentication authentication) {
+		ownershipService.requireSemanticModel(id, authentication);
 		SemanticModel model = semanticModelService.getById(id);
 		return ApiResponse.success("success retrieve semanticModel", model);
 	}
 
 	@PostMapping
-	public ApiResponse<Boolean> create(@RequestBody @Validated SemanticModelAddDTO semanticModelAddDto) {
+	public ApiResponse<Boolean> create(@RequestBody @Validated SemanticModelAddDTO semanticModelAddDto,
+			Authentication authentication) {
+		ownershipService.requireAgent(semanticModelAddDto.getAgentId(), authentication);
 		boolean success = semanticModelService.addSemanticModel(semanticModelAddDto);
 		if (success) {
 			return ApiResponse.success("Semantic model created successfully", true);
@@ -90,7 +98,9 @@ public class SemanticModelController {
 	}
 
 	@PutMapping("/{id}")
-	public ApiResponse<SemanticModel> update(@PathVariable(value = "id") Long id, @RequestBody SemanticModel model) {
+	public ApiResponse<SemanticModel> update(@PathVariable(value = "id") Long id, @RequestBody SemanticModel model,
+			Authentication authentication) {
+		ownershipService.requireSemanticModel(id, authentication);
 		if (semanticModelService.getById(id) == null) {
 			return ApiResponse.error("Semantic model not found");
 		}
@@ -100,7 +110,8 @@ public class SemanticModelController {
 	}
 
 	@DeleteMapping("/{id}")
-	public ApiResponse<Boolean> delete(@PathVariable(value = "id") Long id) {
+	public ApiResponse<Boolean> delete(@PathVariable(value = "id") Long id, Authentication authentication) {
+		ownershipService.requireSemanticModel(id, authentication);
 		if (semanticModelService.getById(id) == null) {
 			return ApiResponse.error("Semantic model not found");
 		}
@@ -112,21 +123,27 @@ public class SemanticModelController {
 	 * 批量删除语义模型
 	 */
 	@DeleteMapping("/batch")
-	public ApiResponse<Boolean> batchDelete(@RequestBody @NotEmpty(message = "ID列表不能为空") List<Long> ids) {
+	public ApiResponse<Boolean> batchDelete(@RequestBody @NotEmpty(message = "ID列表不能为空") List<Long> ids,
+			Authentication authentication) {
+		ids.forEach(id -> ownershipService.requireSemanticModel(id, authentication));
 		semanticModelService.deleteSemanticModels(ids);
 		return ApiResponse.success("批量删除成功", true);
 	}
 
 	// Enable
 	@PutMapping("/enable")
-	public ApiResponse<Boolean> enableFields(@RequestBody @NotEmpty(message = "ID列表不能为空") List<Long> ids) {
+	public ApiResponse<Boolean> enableFields(@RequestBody @NotEmpty(message = "ID列表不能为空") List<Long> ids,
+			Authentication authentication) {
+		ids.forEach(id -> ownershipService.requireSemanticModel(id, authentication));
 		semanticModelService.enableSemanticModels(ids);
 		return ApiResponse.success("Semantic models enabled successfully", true);
 	}
 
 	// Disable
 	@PutMapping("/disable")
-	public ApiResponse<Boolean> disableFields(@RequestBody @NotEmpty(message = "ID列表不能为空") List<Long> ids) {
+	public ApiResponse<Boolean> disableFields(@RequestBody @NotEmpty(message = "ID列表不能为空") List<Long> ids,
+			Authentication authentication) {
+		ids.forEach(id -> ownershipService.requireSemanticModel(id, authentication));
 		ids.forEach(semanticModelService::disableSemanticModel);
 		return ApiResponse.success("Semantic models disabled successfully", true);
 	}
@@ -135,7 +152,9 @@ public class SemanticModelController {
 	 * 批量导入语义模型（JSON格式）
 	 */
 	@PostMapping("/batch-import")
-	public ApiResponse<BatchImportResult> batchImport(@RequestBody @Valid SemanticModelBatchImportDTO dto) {
+	public ApiResponse<BatchImportResult> batchImport(@RequestBody @Valid SemanticModelBatchImportDTO dto,
+			Authentication authentication) {
+		ownershipService.requireAgent(dto.getAgentId(), authentication);
 		log.info("开始批量导入语义模型: agentId={}, 数量={}", dto.getAgentId(), dto.getItems().size());
 		BatchImportResult result = semanticModelService.batchImport(dto);
 		log.info("批量导入完成: 总数={}, 成功={}, 失败={}", result.getTotal(), result.getSuccessCount(), result.getFailCount());
@@ -169,8 +188,9 @@ public class SemanticModelController {
 
 	@PostMapping(value = "/import/excel", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
 	public Mono<ApiResponse<BatchImportResult>> importExcel(@RequestPart("file") FilePart file,
-			@RequestPart("agentId") String agentId) {
+			@RequestPart("agentId") String agentId, Authentication authentication) {
 		Long agentIdLong = Long.parseLong(agentId);
+		ownershipService.requireAgent(agentIdLong, authentication);
 		String filename = file.filename();
 
 		return DataBufferUtils.join(file.content()).flatMap(dataBuffer -> {

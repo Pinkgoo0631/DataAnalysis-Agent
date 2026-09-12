@@ -18,6 +18,8 @@ package com.alibaba.cloud.ai.dataagent.controller;
 import com.alibaba.cloud.ai.dataagent.dto.knowledge.agentknowledge.AgentKnowledgeQueryDTO;
 import com.alibaba.cloud.ai.dataagent.dto.knowledge.agentknowledge.UpdateKnowledgeDTO;
 import com.alibaba.cloud.ai.dataagent.service.knowledge.AgentKnowledgeService;
+import com.alibaba.cloud.ai.dataagent.service.auth.ResourceOwnershipService;
+import com.alibaba.cloud.ai.dataagent.support.AuthenticationTestSupport;
 import com.alibaba.cloud.ai.dataagent.vo.AgentKnowledgeVO;
 import com.alibaba.cloud.ai.dataagent.vo.ApiResponse;
 import com.alibaba.cloud.ai.dataagent.vo.PageResponse;
@@ -27,6 +29,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.core.Authentication;
 
 import java.util.List;
 
@@ -40,11 +43,16 @@ class AgentKnowledgeControllerTest {
 	@Mock
 	private AgentKnowledgeService agentKnowledgeService;
 
+	@Mock
+	private ResourceOwnershipService ownershipService;
+
 	private AgentKnowledgeController controller;
+
+	private final Authentication authentication = AuthenticationTestSupport.user();
 
 	@BeforeEach
 	void setUp() {
-		controller = new AgentKnowledgeController(agentKnowledgeService);
+		controller = new AgentKnowledgeController(agentKnowledgeService, ownershipService);
 	}
 
 	@Test
@@ -54,7 +62,7 @@ class AgentKnowledgeControllerTest {
 		vo.setTitle("Test Knowledge");
 		when(agentKnowledgeService.getKnowledgeById(1)).thenReturn(vo);
 
-		ApiResponse<AgentKnowledgeVO> result = controller.getKnowledgeById(1);
+		ApiResponse<AgentKnowledgeVO> result = controller.getKnowledgeById(1, authentication);
 
 		assertTrue(result.isSuccess());
 		assertEquals("Test Knowledge", result.getData().getTitle());
@@ -64,7 +72,7 @@ class AgentKnowledgeControllerTest {
 	void getKnowledgeById_notFound_returnsError() {
 		when(agentKnowledgeService.getKnowledgeById(999)).thenReturn(null);
 
-		ApiResponse<AgentKnowledgeVO> result = controller.getKnowledgeById(999);
+		ApiResponse<AgentKnowledgeVO> result = controller.getKnowledgeById(999, authentication);
 
 		assertFalse(result.isSuccess());
 	}
@@ -73,7 +81,7 @@ class AgentKnowledgeControllerTest {
 	void getKnowledgeById_serviceThrows_returnsError() {
 		when(agentKnowledgeService.getKnowledgeById(1)).thenThrow(new RuntimeException("db error"));
 
-		ApiResponse<AgentKnowledgeVO> result = controller.getKnowledgeById(1);
+		ApiResponse<AgentKnowledgeVO> result = controller.getKnowledgeById(1, authentication);
 
 		assertFalse(result.isSuccess());
 	}
@@ -88,7 +96,7 @@ class AgentKnowledgeControllerTest {
 		vo.setTitle("Updated Title");
 		when(agentKnowledgeService.updateKnowledge(1, dto)).thenReturn(vo);
 
-		ApiResponse<AgentKnowledgeVO> result = controller.updateKnowledge(1, dto);
+		ApiResponse<AgentKnowledgeVO> result = controller.updateKnowledge(1, dto, authentication);
 
 		assertTrue(result.isSuccess());
 		assertEquals("Updated Title", result.getData().getTitle());
@@ -101,7 +109,7 @@ class AgentKnowledgeControllerTest {
 		vo.setIsRecall(true);
 		when(agentKnowledgeService.updateKnowledgeRecallStatus(1, true)).thenReturn(vo);
 
-		ApiResponse<AgentKnowledgeVO> result = controller.updateRecallStatus(1, true);
+		ApiResponse<AgentKnowledgeVO> result = controller.updateRecallStatus(1, true, authentication);
 
 		assertTrue(result.isSuccess());
 		assertTrue(result.getData().getIsRecall());
@@ -111,7 +119,7 @@ class AgentKnowledgeControllerTest {
 	void deleteKnowledge_success_returnsSuccess() {
 		when(agentKnowledgeService.deleteKnowledge(1)).thenReturn(true);
 
-		ApiResponse<Boolean> result = controller.deleteKnowledge(1);
+		ApiResponse<Boolean> result = controller.deleteKnowledge(1, authentication);
 
 		assertTrue(result.isSuccess());
 	}
@@ -120,7 +128,7 @@ class AgentKnowledgeControllerTest {
 	void deleteKnowledge_failure_returnsError() {
 		when(agentKnowledgeService.deleteKnowledge(1)).thenReturn(false);
 
-		ApiResponse<Boolean> result = controller.deleteKnowledge(1);
+		ApiResponse<Boolean> result = controller.deleteKnowledge(1, authentication);
 
 		assertFalse(result.isSuccess());
 	}
@@ -139,7 +147,7 @@ class AgentKnowledgeControllerTest {
 		pageResult.setTotalPages(1);
 		when(agentKnowledgeService.queryByConditionsWithPage(queryDTO)).thenReturn(pageResult);
 
-		PageResponse<List<AgentKnowledgeVO>> result = controller.queryByPage(queryDTO);
+		PageResponse<List<AgentKnowledgeVO>> result = controller.queryByPage(queryDTO, authentication);
 
 		assertTrue(result.isSuccess());
 		assertEquals(1, result.getData().size());
@@ -152,14 +160,14 @@ class AgentKnowledgeControllerTest {
 		queryDTO.setAgentId(1);
 		when(agentKnowledgeService.queryByConditionsWithPage(queryDTO)).thenThrow(new RuntimeException("db error"));
 
-		PageResponse<List<AgentKnowledgeVO>> result = controller.queryByPage(queryDTO);
+		PageResponse<List<AgentKnowledgeVO>> result = controller.queryByPage(queryDTO, authentication);
 
 		assertFalse(result.isSuccess());
 	}
 
 	@Test
 	void retryEmbedding_success_returnsSuccess() {
-		ApiResponse<AgentKnowledgeVO> result = controller.retryEmbedding(1);
+		ApiResponse<AgentKnowledgeVO> result = controller.retryEmbedding(1, authentication);
 
 		assertTrue(result.isSuccess());
 		verify(agentKnowledgeService).retryEmbedding(1);

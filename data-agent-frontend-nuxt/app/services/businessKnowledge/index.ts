@@ -73,6 +73,8 @@ export interface UpdateBusinessKnowledgeDTO {
   description: string;
   /** 同义词 */
   synonyms: string;
+  /** 是否召回 */
+  isRecall?: boolean;
   /** 智能体 ID */
   agentId: number;
 }

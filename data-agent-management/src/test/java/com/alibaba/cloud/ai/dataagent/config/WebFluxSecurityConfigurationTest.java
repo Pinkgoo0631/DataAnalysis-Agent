@@ -53,7 +53,7 @@ class WebFluxSecurityConfigurationTest {
 				credentialService);
 		var securityChain = configuration.agentApiSecurityWebFilterChain(
 				org.springframework.security.config.web.server.ServerHttpSecurity.http(), manager,
-				new AgentApiKeyServerAuthenticationConverter());
+				new AgentApiKeyServerAuthenticationConverter(), configuration.securityContextRepository());
 		var router = RouterFunctions.route(GET("/api/stream/search"), request -> ok().bodyValue("stream"))
 			.andRoute(GET("/api/agent/list"), request -> ok().bodyValue("management"));
 		webTestClient = WebTestClient.bindToRouterFunction(router)
@@ -62,17 +62,12 @@ class WebFluxSecurityConfigurationTest {
 	}
 
 	@Test
-	void streamSearch_apiKeyDisabled_allowsExistingInternalFlow() {
-		when(agentMapper.findById(1L)).thenReturn(Agent.builder().id(1L).apiKeyEnabled(0).build());
-
-		webTestClient.get().uri("/api/stream/search?agentId=1").exchange().expectStatus().isOk();
+	void streamSearch_apiKeyDisabledWithoutSession_returnsUnauthorized() {
+		webTestClient.get().uri("/api/stream/search?agentId=1").exchange().expectStatus().isUnauthorized();
 	}
 
 	@Test
 	void streamSearch_apiKeyEnabledWithoutCredential_returnsUnauthorized() {
-		when(agentMapper.findById(1L))
-			.thenReturn(Agent.builder().id(1L).apiKeyEnabled(1).apiKey(credentialService.encode("sk-valid")).build());
-
 		webTestClient.get().uri("/api/stream/search?agentId=1").exchange().expectStatus().isUnauthorized();
 	}
 
@@ -103,8 +98,8 @@ class WebFluxSecurityConfigurationTest {
 	}
 
 	@Test
-	void managementEndpoint_isNotClaimedByAgentApiKeyAuthentication() {
-		webTestClient.get().uri("/api/agent/list").exchange().expectStatus().isOk();
+	void managementEndpoint_withoutSession_returnsUnauthorized() {
+		webTestClient.get().uri("/api/agent/list").exchange().expectStatus().isUnauthorized();
 	}
 
 }

@@ -4,7 +4,7 @@ spring:
       type: milvus
       milvus:
         client:
-          host: ${MILVUS_HOST:127.0.0.1}
+          host: ${MILVUS_HOST:106.53.56.163}
           port: ${MILVUS_PORT:19530}
         database-name: ${MILVUS_DATABASE:default}
         collection-name: ${MILVUS_COLLECTION:vector_store}

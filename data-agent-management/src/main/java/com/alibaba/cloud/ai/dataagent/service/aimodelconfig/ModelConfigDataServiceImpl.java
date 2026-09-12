@@ -45,6 +45,11 @@ public class ModelConfigDataServiceImpl implements ModelConfigDataService {
 		return modelConfigMapper.findById(id);
 	}
 
+	@Override
+	public ModelConfig findById(Integer id, Long userId) {
+		return modelConfigMapper.findByIdAndUserId(id, userId);
+	}
+
 	@Transactional(rollbackFor = Exception.class)
 	@Override
 	public void switchActiveStatus(Integer id, ModelType type) {
@@ -60,9 +65,29 @@ public class ModelConfigDataServiceImpl implements ModelConfigDataService {
 		}
 	}
 
+	@Transactional(rollbackFor = Exception.class)
+	@Override
+	public void switchActiveStatus(Integer id, ModelType type, Long userId) {
+		modelConfigMapper.deactivateOthersForUser(type.getCode(), id, userId);
+		ModelConfig entity = modelConfigMapper.findByIdAndUserId(id, userId);
+		if (entity != null) {
+			entity.setIsActive(true);
+			entity.setUpdatedTime(LocalDateTime.now());
+			modelConfigMapper.updateById(entity);
+		}
+	}
+
 	@Override
 	public List<ModelConfigDTO> listConfigs() {
 		return modelConfigMapper.findAll().stream().map(ModelConfigConverter::toMaskedDTO).collect(Collectors.toList());
+	}
+
+	@Override
+	public List<ModelConfigDTO> listConfigs(Long userId) {
+		return modelConfigMapper.findAllByUserId(userId)
+			.stream()
+			.map(ModelConfigConverter::toMaskedDTO)
+			.collect(Collectors.toList());
 	}
 
 	@Override
@@ -70,6 +95,14 @@ public class ModelConfigDataServiceImpl implements ModelConfigDataService {
 		clean(dto);
 		// 只存库，不切换
 		modelConfigMapper.insert(toEntity(dto));
+	}
+
+	@Override
+	public void addConfig(ModelConfigDTO dto, Long userId) {
+		clean(dto);
+		ModelConfig entity = toEntity(dto);
+		entity.setUserId(userId);
+		modelConfigMapper.insert(entity);
 	}
 
 	private void clean(ModelConfigDTO dto) {
@@ -111,6 +144,15 @@ public class ModelConfigDataServiceImpl implements ModelConfigDataService {
 		modelConfigMapper.updateById(entity);
 
 		return entity;
+	}
+
+	@Transactional(rollbackFor = Exception.class)
+	@Override
+	public ModelConfig updateConfigInDb(ModelConfigDTO dto, Long userId) {
+		if (modelConfigMapper.findByIdAndUserId(dto.getId(), userId) == null) {
+			throw new RuntimeException("配置不存在");
+		}
+		return updateConfigInDb(dto);
 	}
 
 	private static void mergeDtoToEntity(ModelConfigDTO dto, ModelConfig oldEntity) {
@@ -159,6 +201,14 @@ public class ModelConfigDataServiceImpl implements ModelConfigDataService {
 	}
 
 	@Override
+	public void deleteConfig(Integer id, Long userId) {
+		if (modelConfigMapper.findByIdAndUserId(id, userId) == null) {
+			throw new RuntimeException("配置不存在");
+		}
+		deleteConfig(id);
+	}
+
+	@Override
 	public ModelConfigDTO getActiveConfigByType(ModelType modelType) {
 		ModelConfig entity = modelConfigMapper.selectActiveByType(modelType.getCode());
 		if (entity == null) {
@@ -166,6 +216,12 @@ public class ModelConfigDataServiceImpl implements ModelConfigDataService {
 			return null;
 		}
 		return toDTO(entity);
+	}
+
+	@Override
+	public ModelConfigDTO getActiveConfigByType(ModelType modelType, Long userId) {
+		ModelConfig entity = modelConfigMapper.selectActiveByTypeAndUserId(modelType.getCode(), userId);
+		return entity == null ? null : toDTO(entity);
 	}
 
 }

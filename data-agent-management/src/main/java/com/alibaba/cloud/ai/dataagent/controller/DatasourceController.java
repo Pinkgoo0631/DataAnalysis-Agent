@@ -24,6 +24,7 @@ import com.alibaba.cloud.ai.dataagent.enums.BizDataSourceTypeEnum;
 import com.alibaba.cloud.ai.dataagent.exception.InternalServerException;
 import com.alibaba.cloud.ai.dataagent.exception.InvalidInputException;
 import com.alibaba.cloud.ai.dataagent.service.datasource.DatasourceService;
+import com.alibaba.cloud.ai.dataagent.service.auth.ResourceOwnershipService;
 import com.alibaba.cloud.ai.dataagent.vo.ApiResponse;
 import jakarta.validation.Valid;
 import java.util.Arrays;
@@ -33,7 +34,7 @@ import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -49,11 +50,12 @@ import org.springframework.web.server.ResponseStatusException;
 @Slf4j
 @RestController
 @RequestMapping("/api/datasource")
-@CrossOrigin(origins = "*")
 @AllArgsConstructor
 public class DatasourceController {
 
 	private final DatasourceService datasourceService;
+
+	private final ResourceOwnershipService ownershipService;
 
 	/**
 	 * Get all data source list
@@ -83,18 +85,19 @@ public class DatasourceController {
 	 */
 	@GetMapping
 	public List<Datasource> getAllDatasource(@RequestParam(value = "status", required = false) String status,
-			@RequestParam(value = "type", required = false) String type) {
+			@RequestParam(value = "type", required = false) String type, Authentication authentication) {
+		Long userId = ownershipService.userId(authentication);
 
 		List<Datasource> result;
 
 		if (StringUtils.isNotBlank(status)) {
-			result = datasourceService.getDatasourceByStatus(status);
+			result = datasourceService.getDatasourceByStatus(status, userId);
 		}
 		else if (StringUtils.isNotBlank(type)) {
-			result = datasourceService.getDatasourceByType(type);
+			result = datasourceService.getDatasourceByType(type, userId);
 		}
 		else {
-			result = datasourceService.getAllDatasource();
+			result = datasourceService.getAllDatasource(userId);
 		}
 
 		return result;
@@ -104,13 +107,13 @@ public class DatasourceController {
 	 * Get data source details by ID
 	 */
 	@GetMapping("/{id}")
-	public Datasource getDatasourceById(@PathVariable Integer id) {
-		return checkDatasourceExists(id);
+	public Datasource getDatasourceById(@PathVariable Integer id, Authentication authentication) {
+		return ownershipService.requireDatasource(id, authentication);
 	}
 
 	@GetMapping("/{id}/tables")
-	public List<String> getDatasourceTables(@PathVariable Integer id) {
-		checkDatasourceExists(id);
+	public List<String> getDatasourceTables(@PathVariable Integer id, Authentication authentication) {
+		ownershipService.requireDatasource(id, authentication);
 		try {
 			return datasourceService.getDatasourceTables(id);
 		}
@@ -123,9 +126,9 @@ public class DatasourceController {
 	 * Create data source
 	 */
 	@PostMapping
-	public Datasource createDatasource(@RequestBody Datasource datasource) {
+	public Datasource createDatasource(@RequestBody Datasource datasource, Authentication authentication) {
 		try {
-			return datasourceService.createDatasource(datasource);
+			return datasourceService.createDatasource(datasource, ownershipService.userId(authentication));
 		}
 		catch (Exception e) {
 			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, e.getMessage());
@@ -136,8 +139,9 @@ public class DatasourceController {
 	 * Update data source
 	 */
 	@PutMapping("/{id}")
-	public Datasource updateDatasource(@PathVariable Integer id, @RequestBody Datasource datasource) {
-		checkDatasourceExists(id);
+	public Datasource updateDatasource(@PathVariable Integer id, @RequestBody Datasource datasource,
+			Authentication authentication) {
+		ownershipService.requireDatasource(id, authentication);
 		try {
 			return datasourceService.updateDatasource(id, datasource);
 		}
@@ -150,9 +154,9 @@ public class DatasourceController {
 	 * Delete data source
 	 */
 	@DeleteMapping("/{id}")
-	public ApiResponse deleteDatasource(@PathVariable Integer id) {
+	public ApiResponse deleteDatasource(@PathVariable Integer id, Authentication authentication) {
 		try {
-			checkDatasourceExists(id);
+			ownershipService.requireDatasource(id, authentication);
 			datasourceService.deleteDatasource(id);
 			return ApiResponse.success("数据源删除成功");
 		}
@@ -168,8 +172,9 @@ public class DatasourceController {
 	 * Test data source connection
 	 */
 	@PostMapping("/{id}/test")
-	public ApiResponse testConnection(@PathVariable Integer id) {
+	public ApiResponse testConnection(@PathVariable Integer id, Authentication authentication) {
 		try {
+			ownershipService.requireDatasource(id, authentication);
 			boolean success = datasourceService.testConnection(id);
 			return success ? ApiResponse.success("连接测试成功") : ApiResponse.error("连接测试失败");
 		}
@@ -182,8 +187,10 @@ public class DatasourceController {
 	 * 获取数据源表的字段列表
 	 */
 	@GetMapping("/{id}/tables/{tableName}/columns")
-	public ApiResponse<List<String>> getTableColumns(@PathVariable Integer id, @PathVariable String tableName) {
+	public ApiResponse<List<String>> getTableColumns(@PathVariable Integer id, @PathVariable String tableName,
+			Authentication authentication) {
 		try {
+			ownershipService.requireDatasource(id, authentication);
 			List<String> columns = datasourceService.getTableColumns(id, tableName);
 			return ApiResponse.success("获取字段列表成功", columns);
 		}
@@ -196,8 +203,10 @@ public class DatasourceController {
 	 * 获取数据源的逻辑外键列表
 	 */
 	@GetMapping("/{id}/logical-relations")
-	public ApiResponse<List<LogicalRelation>> getLogicalRelations(@PathVariable(value = "id") Integer datasourceId) {
+	public ApiResponse<List<LogicalRelation>> getLogicalRelations(@PathVariable(value = "id") Integer datasourceId,
+			Authentication authentication) {
 		try {
+			ownershipService.requireDatasource(datasourceId, authentication);
 			List<LogicalRelation> logicalRelations = datasourceService.getLogicalRelations(datasourceId);
 			return ApiResponse.success("success get logical relations", logicalRelations);
 		}
@@ -212,8 +221,9 @@ public class DatasourceController {
 	 */
 	@PostMapping("/{id}/logical-relations")
 	public ApiResponse<LogicalRelation> addLogicalRelation(@PathVariable(value = "id") Integer datasourceId,
-			@Valid @RequestBody CreateLogicalRelationDTO dto) {
+			@Valid @RequestBody CreateLogicalRelationDTO dto, Authentication authentication) {
 		try {
+			ownershipService.requireDatasource(datasourceId, authentication);
 			LogicalRelation logicalRelation = LogicalRelation.builder()
 				.sourceTableName(dto.getSourceTableName())
 				.sourceColumnName(dto.getSourceColumnName())
@@ -237,8 +247,9 @@ public class DatasourceController {
 	 */
 	@PutMapping("/{id}/logical-relations/{relationId}")
 	public ApiResponse<LogicalRelation> updateLogicalRelation(@PathVariable(value = "id") Integer datasourceId,
-			@PathVariable Integer relationId, @RequestBody UpdateLogicalRelationDTO dto) {
+			@PathVariable Integer relationId, @RequestBody UpdateLogicalRelationDTO dto, Authentication authentication) {
 		try {
+			ownershipService.requireDatasource(datasourceId, authentication);
 			LogicalRelation logicalRelation = LogicalRelation.builder()
 				.sourceTableName(dto.getSourceTableName())
 				.sourceColumnName(dto.getSourceColumnName())
@@ -263,8 +274,9 @@ public class DatasourceController {
 	 */
 	@DeleteMapping("/{id}/logical-relations/{relationId}")
 	public ApiResponse<Void> deleteLogicalRelation(@PathVariable(value = "id") Integer datasourceId,
-			@PathVariable Integer relationId) {
+			@PathVariable Integer relationId, Authentication authentication) {
 		try {
+			ownershipService.requireDatasource(datasourceId, authentication);
 			datasourceService.deleteLogicalRelation(datasourceId, relationId);
 			return ApiResponse.success("success delete logical relation");
 		}
@@ -279,8 +291,9 @@ public class DatasourceController {
 	 */
 	@PutMapping("/{id}/logical-relations")
 	public ApiResponse<List<LogicalRelation>> saveLogicalRelations(@PathVariable(value = "id") Integer datasourceId,
-			@RequestBody List<LogicalRelation> logicalRelations) {
+			@RequestBody List<LogicalRelation> logicalRelations, Authentication authentication) {
 		try {
+			ownershipService.requireDatasource(datasourceId, authentication);
 			List<LogicalRelation> saved = datasourceService.saveLogicalRelations(datasourceId, logicalRelations);
 			return ApiResponse.success("success save logical relations", saved);
 		}
@@ -288,14 +301,6 @@ public class DatasourceController {
 			log.error("Failed to save logical relations for datasource: {}", datasourceId, e);
 			throw new InternalServerException("批量保存逻辑外键失败：" + e.getMessage());
 		}
-	}
-
-	private Datasource checkDatasourceExists(Integer id) {
-		Datasource datasource = datasourceService.getDatasourceById(id);
-		if (datasource == null) {
-			throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Datasource: [%s] not found".formatted(id));
-		}
-		return datasource;
 	}
 
 }

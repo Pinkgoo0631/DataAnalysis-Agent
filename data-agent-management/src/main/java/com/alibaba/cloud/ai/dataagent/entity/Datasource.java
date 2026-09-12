@@ -59,6 +59,8 @@ public class Datasource {
 
 	private Long creatorId;
 
+	private Long userId;
+
 	@JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
 	@DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss")
 	private LocalDateTime createTime;

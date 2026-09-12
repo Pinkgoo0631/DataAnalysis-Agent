@@ -71,6 +71,14 @@ public class ModelConfigOpsService {
 		}
 	}
 
+	@Transactional(rollbackFor = Exception.class)
+	public void updateAndRefresh(ModelConfigDTO dto, Long userId) {
+		ModelConfig entity = modelConfigDataService.updateConfigInDb(dto, userId);
+		if (Boolean.TRUE.equals(entity.getIsActive())) {
+			refreshMemoryModel(entity.getModelType(), userId);
+		}
+	}
+
 	/**
 	 * 激活指定配置
 	 */
@@ -97,6 +105,16 @@ public class ModelConfigOpsService {
 		log.info("Config ID={} activated successfully.", id);
 	}
 
+	@Transactional(rollbackFor = Exception.class)
+	public void activateConfig(Integer id, Long userId) {
+		ModelConfig entity = modelConfigDataService.findById(id, userId);
+		if (entity == null) {
+			throw new RuntimeException("配置不存在");
+		}
+		modelConfigDataService.switchActiveStatus(id, entity.getModelType(), userId);
+		refreshMemoryModel(entity.getModelType(), userId);
+	}
+
 	/**
 	 * 私有方法：根据实体创建并替换内存代理
 	 */
@@ -112,11 +130,31 @@ public class ModelConfigOpsService {
 		}
 	}
 
+	private void refreshMemoryModel(ModelType type, Long userId) {
+		if (ModelType.CHAT.equals(type)) {
+			aiModelRegistry.refreshChat(userId);
+		}
+		else if (ModelType.EMBEDDING.equals(type)) {
+			aiModelRegistry.refreshEmbedding(userId);
+		}
+		else {
+			throw new RuntimeException("未知的模型类型: " + type);
+		}
+	}
+
 	/**
 	 * 测试连接逻辑 注意：这里创建的模型是“临时”的，用完即丢，不会影响当前系统正在运行的模型
 	 */
 	public void testConnection(Integer id) {
 		ModelConfig entity = modelConfigDataService.findById(id);
+		if (entity == null) {
+			throw new IllegalArgumentException("配置不存在");
+		}
+		testConnection(ModelConfigConverter.toDTO(entity));
+	}
+
+	public void testConnection(Integer id, Long userId) {
+		ModelConfig entity = modelConfigDataService.findById(id, userId);
 		if (entity == null) {
 			throw new IllegalArgumentException("配置不存在");
 		}

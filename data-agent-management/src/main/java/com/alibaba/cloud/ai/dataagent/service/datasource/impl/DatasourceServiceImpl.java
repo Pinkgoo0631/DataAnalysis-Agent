@@ -69,13 +69,28 @@ public class DatasourceServiceImpl implements DatasourceService {
 	}
 
 	@Override
+	public List<Datasource> getAllDatasource(Long userId) {
+		return datasourceMapper.selectAllByUserId(userId);
+	}
+
+	@Override
 	public List<Datasource> getDatasourceByStatus(String status) {
 		return datasourceMapper.selectByStatus(status);
 	}
 
 	@Override
+	public List<Datasource> getDatasourceByStatus(String status, Long userId) {
+		return datasourceMapper.selectByStatusAndUserId(status, userId);
+	}
+
+	@Override
 	public List<Datasource> getDatasourceByType(String type) {
 		return datasourceMapper.selectByType(type);
+	}
+
+	@Override
+	public List<Datasource> getDatasourceByType(String type, Long userId) {
+		return datasourceMapper.selectByTypeAndUserId(type, userId);
 	}
 
 	@Override
@@ -110,6 +125,13 @@ public class DatasourceServiceImpl implements DatasourceService {
 
 		datasourceMapper.insert(datasource);
 		return datasource;
+	}
+
+	@Override
+	public Datasource createDatasource(Datasource datasource, Long userId) {
+		datasource.setUserId(userId);
+		datasource.setCreatorId(userId);
+		return createDatasource(datasource);
 	}
 
 	@Override

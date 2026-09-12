@@ -19,6 +19,8 @@ import com.alibaba.cloud.ai.dataagent.dto.schema.SemanticModelAddDTO;
 import com.alibaba.cloud.ai.dataagent.dto.schema.SemanticModelBatchImportDTO;
 import com.alibaba.cloud.ai.dataagent.entity.SemanticModel;
 import com.alibaba.cloud.ai.dataagent.service.semantic.SemanticModelService;
+import com.alibaba.cloud.ai.dataagent.service.auth.ResourceOwnershipService;
+import com.alibaba.cloud.ai.dataagent.support.AuthenticationTestSupport;
 import com.alibaba.cloud.ai.dataagent.vo.ApiResponse;
 import com.alibaba.cloud.ai.dataagent.vo.BatchImportResult;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,7 +28,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 
 import java.util.List;
 
@@ -35,24 +40,31 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class SemanticModelControllerTest {
 
 	@Mock
 	private SemanticModelService semanticModelService;
 
+	@Mock
+	private ResourceOwnershipService ownershipService;
+
 	private SemanticModelController controller;
+
+	private final Authentication authentication = AuthenticationTestSupport.user();
 
 	@BeforeEach
 	void setUp() {
-		controller = new SemanticModelController(semanticModelService);
+		controller = new SemanticModelController(semanticModelService, ownershipService);
+		when(ownershipService.ownsAgent(anyLong(), eq(authentication))).thenReturn(true);
 	}
 
 	@Test
 	void list_withKeyword_callsSearch() {
-		SemanticModel model = SemanticModel.builder().id(1L).businessName("Revenue").build();
+		SemanticModel model = SemanticModel.builder().id(1L).agentId(1L).businessName("Revenue").build();
 		when(semanticModelService.search("Rev")).thenReturn(List.of(model));
 
-		ApiResponse<List<SemanticModel>> result = controller.list("Rev", null);
+		ApiResponse<List<SemanticModel>> result = controller.list("Rev", null, authentication);
 
 		assertTrue(result.isSuccess());
 		assertEquals(1, result.getData().size());
@@ -63,7 +75,7 @@ class SemanticModelControllerTest {
 		SemanticModel model = SemanticModel.builder().id(1L).agentId(1L).build();
 		when(semanticModelService.getByAgentId(1L)).thenReturn(List.of(model));
 
-		ApiResponse<List<SemanticModel>> result = controller.list(null, 1L);
+		ApiResponse<List<SemanticModel>> result = controller.list(null, 1L, authentication);
 
 		assertTrue(result.isSuccess());
 		assertEquals(1, result.getData().size());
@@ -73,7 +85,7 @@ class SemanticModelControllerTest {
 	void list_noParams_callsGetAll() {
 		when(semanticModelService.getAll()).thenReturn(List.of());
 
-		ApiResponse<List<SemanticModel>> result = controller.list(null, null);
+		ApiResponse<List<SemanticModel>> result = controller.list(null, null, authentication);
 
 		assertTrue(result.isSuccess());
 		verify(semanticModelService).getAll();
@@ -83,7 +95,7 @@ class SemanticModelControllerTest {
 	void list_keywordPrioritizedOverAgentId() {
 		when(semanticModelService.search("test")).thenReturn(List.of());
 
-		controller.list("test", 1L);
+		controller.list("test", 1L, authentication);
 
 		verify(semanticModelService).search("test");
 		verify(semanticModelService, never()).getByAgentId(anyLong());
@@ -94,7 +106,7 @@ class SemanticModelControllerTest {
 		SemanticModel model = SemanticModel.builder().id(1L).businessName("Revenue").build();
 		when(semanticModelService.getById(1L)).thenReturn(model);
 
-		ApiResponse<SemanticModel> result = controller.get(1L);
+		ApiResponse<SemanticModel> result = controller.get(1L, authentication);
 
 		assertTrue(result.isSuccess());
 		assertEquals("Revenue", result.getData().getBusinessName());
@@ -111,7 +123,7 @@ class SemanticModelControllerTest {
 			.build();
 		when(semanticModelService.addSemanticModel(dto)).thenReturn(true);
 
-		ApiResponse<Boolean> result = controller.create(dto);
+		ApiResponse<Boolean> result = controller.create(dto, authentication);
 
 		assertTrue(result.isSuccess());
 		assertTrue(result.getData());
@@ -128,7 +140,7 @@ class SemanticModelControllerTest {
 			.build();
 		when(semanticModelService.addSemanticModel(dto)).thenReturn(false);
 
-		ApiResponse<Boolean> result = controller.create(dto);
+		ApiResponse<Boolean> result = controller.create(dto, authentication);
 
 		assertFalse(result.isSuccess());
 	}
@@ -139,7 +151,7 @@ class SemanticModelControllerTest {
 		SemanticModel updated = SemanticModel.builder().businessName("New Name").build();
 		when(semanticModelService.getById(1L)).thenReturn(existing);
 
-		ApiResponse<SemanticModel> result = controller.update(1L, updated);
+		ApiResponse<SemanticModel> result = controller.update(1L, updated, authentication);
 
 		assertTrue(result.isSuccess());
 		assertEquals(1L, result.getData().getId());
@@ -150,7 +162,7 @@ class SemanticModelControllerTest {
 	void update_notFound_returnsError() {
 		when(semanticModelService.getById(999L)).thenReturn(null);
 
-		ApiResponse<SemanticModel> result = controller.update(999L, new SemanticModel());
+		ApiResponse<SemanticModel> result = controller.update(999L, new SemanticModel(), authentication);
 
 		assertFalse(result.isSuccess());
 	}
@@ -160,7 +172,7 @@ class SemanticModelControllerTest {
 		SemanticModel existing = SemanticModel.builder().id(1L).build();
 		when(semanticModelService.getById(1L)).thenReturn(existing);
 
-		ApiResponse<Boolean> result = controller.delete(1L);
+		ApiResponse<Boolean> result = controller.delete(1L, authentication);
 
 		assertTrue(result.isSuccess());
 		verify(semanticModelService).deleteSemanticModel(1L);
@@ -170,7 +182,7 @@ class SemanticModelControllerTest {
 	void delete_notFound_returnsError() {
 		when(semanticModelService.getById(999L)).thenReturn(null);
 
-		ApiResponse<Boolean> result = controller.delete(999L);
+		ApiResponse<Boolean> result = controller.delete(999L, authentication);
 
 		assertFalse(result.isSuccess());
 	}
@@ -179,7 +191,7 @@ class SemanticModelControllerTest {
 	void batchDelete_success_returnsSuccess() {
 		List<Long> ids = List.of(1L, 2L, 3L);
 
-		ApiResponse<Boolean> result = controller.batchDelete(ids);
+		ApiResponse<Boolean> result = controller.batchDelete(ids, authentication);
 
 		assertTrue(result.isSuccess());
 		verify(semanticModelService).deleteSemanticModels(ids);
@@ -189,7 +201,7 @@ class SemanticModelControllerTest {
 	void enableFields_success_returnsSuccess() {
 		List<Long> ids = List.of(1L, 2L);
 
-		ApiResponse<Boolean> result = controller.enableFields(ids);
+		ApiResponse<Boolean> result = controller.enableFields(ids, authentication);
 
 		assertTrue(result.isSuccess());
 		verify(semanticModelService).enableSemanticModels(ids);
@@ -199,7 +211,7 @@ class SemanticModelControllerTest {
 	void disableFields_success_returnsSuccess() {
 		List<Long> ids = List.of(1L, 2L);
 
-		ApiResponse<Boolean> result = controller.disableFields(ids);
+		ApiResponse<Boolean> result = controller.disableFields(ids, authentication);
 
 		assertTrue(result.isSuccess());
 		verify(semanticModelService, times(2)).disableSemanticModel(anyLong());
@@ -211,7 +223,7 @@ class SemanticModelControllerTest {
 		BatchImportResult importResult = BatchImportResult.builder().total(5).successCount(4).failCount(1).build();
 		when(semanticModelService.batchImport(dto)).thenReturn(importResult);
 
-		ApiResponse<BatchImportResult> result = controller.batchImport(dto);
+		ApiResponse<BatchImportResult> result = controller.batchImport(dto, authentication);
 
 		assertTrue(result.isSuccess());
 		assertEquals(5, result.getData().getTotal());

@@ -16,6 +16,8 @@
 package com.alibaba.cloud.ai.dataagent.controller;
 
 import com.alibaba.cloud.ai.dataagent.service.chat.SessionEventPublisher;
+import com.alibaba.cloud.ai.dataagent.service.auth.ResourceOwnershipService;
+import com.alibaba.cloud.ai.dataagent.support.AuthenticationTestSupport;
 import com.alibaba.cloud.ai.dataagent.vo.SessionUpdateEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,6 +27,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.http.server.reactive.ServerHttpResponse;
+import org.springframework.security.core.Authentication;
 import reactor.core.publisher.Flux;
 import reactor.test.StepVerifier;
 
@@ -37,11 +40,16 @@ class SessionEventControllerTest {
 	@Mock
 	private SessionEventPublisher sessionEventPublisher;
 
+	@Mock
+	private ResourceOwnershipService ownershipService;
+
 	private SessionEventController controller;
+
+	private final Authentication authentication = AuthenticationTestSupport.user();
 
 	@BeforeEach
 	void setUp() {
-		controller = new SessionEventController(sessionEventPublisher);
+		controller = new SessionEventController(sessionEventPublisher, ownershipService);
 	}
 
 	@Test
@@ -57,7 +65,7 @@ class SessionEventControllerTest {
 			.build();
 		when(sessionEventPublisher.register(1)).thenReturn(Flux.just(sse));
 
-		Flux<ServerSentEvent<SessionUpdateEvent>> result = controller.streamSessionUpdates(1, response);
+		Flux<ServerSentEvent<SessionUpdateEvent>> result = controller.streamSessionUpdates(1, response, authentication);
 
 		StepVerifier.create(result)
 			.expectNextMatches(e -> e.data() != null && "session-1".equals(e.data().getSessionId()))
@@ -71,7 +79,7 @@ class SessionEventControllerTest {
 		when(response.getHeaders()).thenReturn(headers);
 		when(sessionEventPublisher.register(1)).thenReturn(Flux.empty());
 
-		controller.streamSessionUpdates(1, response);
+		controller.streamSessionUpdates(1, response, authentication);
 
 		assertEquals(3, headers.size());
 		assertTrue(headers.containsKey("Cache-Control"));

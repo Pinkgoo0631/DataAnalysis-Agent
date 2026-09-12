@@ -28,6 +28,8 @@ public class GraphRequest {
 
 	private String agentId;
 
+	private Long userId;
+
 	/** Stable chat-memory conversation identifier. */
 	private String conversationId;
 

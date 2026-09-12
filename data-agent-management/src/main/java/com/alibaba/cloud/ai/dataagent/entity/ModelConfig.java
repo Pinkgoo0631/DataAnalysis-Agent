@@ -26,6 +26,8 @@ public class ModelConfig {
 
 	private Integer id;
 
+	private Long userId;
+
 	// 厂商标识 (方便前端展示回显，实际调用主要靠 baseUrl)
 	private String provider;
 

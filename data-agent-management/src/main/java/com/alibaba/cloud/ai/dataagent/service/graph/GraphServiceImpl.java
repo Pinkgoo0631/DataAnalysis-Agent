@@ -23,6 +23,7 @@ import com.alibaba.cloud.ai.dataagent.dto.GraphRequest;
 import com.alibaba.cloud.ai.dataagent.service.graph.Context.MultiTurnContextManager;
 import com.alibaba.cloud.ai.dataagent.service.graph.Context.StreamContext;
 import com.alibaba.cloud.ai.dataagent.vo.GraphNodeResponse;
+import com.alibaba.cloud.ai.dataagent.service.aimodelconfig.ModelUserContext;
 import com.alibaba.cloud.ai.graph.*;
 import com.alibaba.cloud.ai.graph.checkpoint.BaseCheckpointSaver;
 import com.alibaba.cloud.ai.graph.exception.GraphRunnerException;
@@ -249,7 +250,10 @@ public class GraphServiceImpl implements GraphService {
 				log.debug("StreamContext cleaned before subscription for threadId: {}", threadId);
 				return;
 			}
-			Disposable disposable = nodeOutputFlux.subscribe(output -> handleNodeOutput(graphRequest, output),
+			Flux<NodeOutput> tenantFlux = graphRequest.getUserId() == null ? nodeOutputFlux
+					: nodeOutputFlux.contextWrite(contextView -> contextView.put(ModelUserContext.USER_ID,
+							graphRequest.getUserId()));
+			Disposable disposable = tenantFlux.subscribe(output -> handleNodeOutput(graphRequest, output),
 					error -> handleStreamError(graphRequest, error), () -> handleStreamComplete(graphRequest));
 			// 原子性地设置 Disposable，如果已经清理则立即释放
 			synchronized (context) {

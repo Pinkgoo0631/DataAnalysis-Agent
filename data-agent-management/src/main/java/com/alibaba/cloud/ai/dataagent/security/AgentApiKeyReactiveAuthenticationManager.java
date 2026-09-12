@@ -51,7 +51,7 @@ public class AgentApiKeyReactiveAuthenticationManager implements ReactiveAuthent
 			throw new BadCredentialsException("Invalid agent API credentials");
 		}
 		if (!Integer.valueOf(1).equals(agent.getApiKeyEnabled())) {
-			return authenticated(agentId);
+			throw new BadCredentialsException("Agent API access is disabled");
 		}
 		String rawApiKey = (String) token.getCredentials();
 		if (!credentialService.matches(rawApiKey, agent.getApiKey())) {

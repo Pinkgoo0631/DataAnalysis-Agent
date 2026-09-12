@@ -23,6 +23,8 @@ import com.alibaba.cloud.ai.dataagent.entity.LogicalRelation;
 import com.alibaba.cloud.ai.dataagent.exception.InternalServerException;
 import com.alibaba.cloud.ai.dataagent.exception.InvalidInputException;
 import com.alibaba.cloud.ai.dataagent.service.datasource.DatasourceService;
+import com.alibaba.cloud.ai.dataagent.service.auth.ResourceOwnershipService;
+import com.alibaba.cloud.ai.dataagent.support.AuthenticationTestSupport;
 import com.alibaba.cloud.ai.dataagent.vo.ApiResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,6 +34,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.security.core.Authentication;
+import org.springframework.http.HttpStatus;
 
 import java.util.Collections;
 import java.util.List;
@@ -47,11 +51,19 @@ class DatasourceControllerTest {
 	@Mock
 	private DatasourceService datasourceService;
 
+	@Mock
+	private ResourceOwnershipService ownershipService;
+
 	private DatasourceController datasourceController;
+
+	private final Authentication authentication = AuthenticationTestSupport.user();
 
 	@BeforeEach
 	void setUp() {
-		datasourceController = new DatasourceController(datasourceService);
+		datasourceController = new DatasourceController(datasourceService, ownershipService);
+		when(ownershipService.userId(authentication)).thenReturn(1L);
+		when(ownershipService.requireDatasource(anyInt(), eq(authentication)))
+			.thenAnswer(invocation -> Datasource.builder().id(invocation.getArgument(0)).build());
 	}
 
 	@Test
@@ -64,9 +76,9 @@ class DatasourceControllerTest {
 			.host("localhost")
 			.port(3306)
 			.build();
-		when(datasourceService.createDatasource(any(Datasource.class))).thenReturn(saved);
+		when(datasourceService.createDatasource(any(Datasource.class), eq(1L))).thenReturn(saved);
 
-		Datasource result = datasourceController.createDatasource(input);
+		Datasource result = datasourceController.createDatasource(input, authentication);
 
 		assertNotNull(result);
 		assertEquals(1, result.getId());
@@ -76,16 +88,16 @@ class DatasourceControllerTest {
 	@Test
 	void createDatasource_serviceThrows_throwsResponseStatusException() {
 		Datasource input = Datasource.builder().name("bad-db").type("MYSQL").build();
-		when(datasourceService.createDatasource(any())).thenThrow(new RuntimeException("db error"));
+		when(datasourceService.createDatasource(any(), eq(1L))).thenThrow(new RuntimeException("db error"));
 
-		assertThrows(ResponseStatusException.class, () -> datasourceController.createDatasource(input));
+		assertThrows(ResponseStatusException.class, () -> datasourceController.createDatasource(input, authentication));
 	}
 
 	@Test
 	void testConnection_validDatasource_returnsSuccess() {
 		when(datasourceService.testConnection(1)).thenReturn(true);
 
-		ApiResponse result = datasourceController.testConnection(1);
+		ApiResponse result = datasourceController.testConnection(1, authentication);
 
 		assertTrue(result.isSuccess());
 	}
@@ -94,7 +106,7 @@ class DatasourceControllerTest {
 	void testConnection_failedConnection_returnsError() {
 		when(datasourceService.testConnection(1)).thenReturn(false);
 
-		ApiResponse result = datasourceController.testConnection(1);
+		ApiResponse result = datasourceController.testConnection(1, authentication);
 
 		assertFalse(result.isSuccess());
 	}
@@ -103,7 +115,7 @@ class DatasourceControllerTest {
 	void testConnection_serviceThrows_throwsInternalServerException() {
 		when(datasourceService.testConnection(1)).thenThrow(new RuntimeException("conn error"));
 
-		assertThrows(InternalServerException.class, () -> datasourceController.testConnection(1));
+		assertThrows(InternalServerException.class, () -> datasourceController.testConnection(1, authentication));
 	}
 
 	@Test
@@ -111,7 +123,7 @@ class DatasourceControllerTest {
 		when(datasourceService.getDatasourceById(1)).thenReturn(Datasource.builder().id(1).build());
 		when(datasourceService.getTableColumns(1, "users")).thenReturn(List.of("id", "name", "email"));
 
-		ApiResponse<List<String>> result = datasourceController.getTableColumns(1, "users");
+		ApiResponse<List<String>> result = datasourceController.getTableColumns(1, "users", authentication);
 
 		assertTrue(result.isSuccess());
 		assertEquals(3, result.getData().size());
@@ -122,7 +134,8 @@ class DatasourceControllerTest {
 	void getTableColumns_serviceThrows_throwsInternalServerException() throws Exception {
 		when(datasourceService.getTableColumns(1, "bad_table")).thenThrow(new RuntimeException("no columns"));
 
-		assertThrows(InternalServerException.class, () -> datasourceController.getTableColumns(1, "bad_table"));
+		assertThrows(InternalServerException.class,
+				() -> datasourceController.getTableColumns(1, "bad_table", authentication));
 	}
 
 	@Test
@@ -138,7 +151,7 @@ class DatasourceControllerTest {
 			.build();
 		when(datasourceService.getLogicalRelations(1)).thenReturn(List.of(relation));
 
-		ApiResponse<List<LogicalRelation>> result = datasourceController.getLogicalRelations(1);
+		ApiResponse<List<LogicalRelation>> result = datasourceController.getLogicalRelations(1, authentication);
 
 		assertTrue(result.isSuccess());
 		assertEquals(1, result.getData().size());
@@ -149,7 +162,7 @@ class DatasourceControllerTest {
 	void getLogicalRelations_serviceThrows_throwsInternalServerException() {
 		when(datasourceService.getLogicalRelations(1)).thenThrow(new RuntimeException("db error"));
 
-		assertThrows(InternalServerException.class, () -> datasourceController.getLogicalRelations(1));
+		assertThrows(InternalServerException.class, () -> datasourceController.getLogicalRelations(1, authentication));
 	}
 
 	@Test
@@ -173,7 +186,7 @@ class DatasourceControllerTest {
 			.build();
 		when(datasourceService.addLogicalRelation(eq(1), any(LogicalRelation.class))).thenReturn(created);
 
-		ApiResponse<LogicalRelation> result = datasourceController.addLogicalRelation(1, dto);
+		ApiResponse<LogicalRelation> result = datasourceController.addLogicalRelation(1, dto, authentication);
 
 		assertTrue(result.isSuccess());
 		assertEquals("t_order", result.getData().getSourceTableName());
@@ -189,7 +202,7 @@ class DatasourceControllerTest {
 
 		when(datasourceService.addLogicalRelation(eq(1), any())).thenThrow(new RuntimeException("duplicate"));
 
-		assertThrows(InternalServerException.class, () -> datasourceController.addLogicalRelation(1, dto));
+		assertThrows(InternalServerException.class, () -> datasourceController.addLogicalRelation(1, dto, authentication));
 	}
 
 	@Test
@@ -213,7 +226,7 @@ class DatasourceControllerTest {
 			.build();
 		when(datasourceService.updateLogicalRelation(eq(1), eq(5), any(LogicalRelation.class))).thenReturn(updated);
 
-		ApiResponse<LogicalRelation> result = datasourceController.updateLogicalRelation(1, 5, dto);
+		ApiResponse<LogicalRelation> result = datasourceController.updateLogicalRelation(1, 5, dto, authentication);
 
 		assertTrue(result.isSuccess());
 		assertEquals("1:1", result.getData().getRelationType());
@@ -225,14 +238,15 @@ class DatasourceControllerTest {
 		dto.setSourceTableName("a");
 		when(datasourceService.updateLogicalRelation(eq(1), eq(5), any())).thenThrow(new RuntimeException("not found"));
 
-		assertThrows(InternalServerException.class, () -> datasourceController.updateLogicalRelation(1, 5, dto));
+		assertThrows(InternalServerException.class,
+				() -> datasourceController.updateLogicalRelation(1, 5, dto, authentication));
 	}
 
 	@Test
 	void deleteLogicalRelation_success_returnsSuccess() {
 		doNothing().when(datasourceService).deleteLogicalRelation(1, 5);
 
-		ApiResponse<Void> result = datasourceController.deleteLogicalRelation(1, 5);
+		ApiResponse<Void> result = datasourceController.deleteLogicalRelation(1, 5, authentication);
 
 		assertTrue(result.isSuccess());
 		verify(datasourceService).deleteLogicalRelation(1, 5);
@@ -242,7 +256,8 @@ class DatasourceControllerTest {
 	void deleteLogicalRelation_serviceThrows_throwsInternalServerException() {
 		doThrow(new RuntimeException("delete error")).when(datasourceService).deleteLogicalRelation(1, 5);
 
-		assertThrows(InternalServerException.class, () -> datasourceController.deleteLogicalRelation(1, 5));
+		assertThrows(InternalServerException.class,
+				() -> datasourceController.deleteLogicalRelation(1, 5, authentication));
 	}
 
 	@Test
@@ -256,7 +271,8 @@ class DatasourceControllerTest {
 		List<LogicalRelation> saved = List.of(LogicalRelation.builder().id(1).datasourceId(1).build());
 		when(datasourceService.saveLogicalRelations(eq(1), anyList())).thenReturn(saved);
 
-		ApiResponse<List<LogicalRelation>> result = datasourceController.saveLogicalRelations(1, List.of(lr));
+		ApiResponse<List<LogicalRelation>> result = datasourceController.saveLogicalRelations(1, List.of(lr),
+				authentication);
 
 		assertTrue(result.isSuccess());
 		assertEquals(1, result.getData().size());
@@ -267,54 +283,56 @@ class DatasourceControllerTest {
 		when(datasourceService.saveLogicalRelations(eq(1), anyList())).thenThrow(new RuntimeException("save error"));
 
 		assertThrows(InternalServerException.class,
-				() -> datasourceController.saveLogicalRelations(1, Collections.emptyList()));
+				() -> datasourceController.saveLogicalRelations(1, Collections.emptyList(), authentication));
 	}
 
 	@Test
 	void getDatasourceById_nonExisting_throwsNotFoundException() {
-		when(datasourceService.getDatasourceById(999)).thenReturn(null);
+		when(ownershipService.requireDatasource(999, authentication))
+			.thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND));
 
-		assertThrows(ResponseStatusException.class, () -> datasourceController.getDatasourceById(999));
+		assertThrows(ResponseStatusException.class, () -> datasourceController.getDatasourceById(999, authentication));
 	}
 
 	@Test
 	void getDatasourceById_existing_returnsDatasource() {
 		Datasource ds = Datasource.builder().id(1).name("test").build();
-		when(datasourceService.getDatasourceById(1)).thenReturn(ds);
+		when(ownershipService.requireDatasource(1, authentication)).thenReturn(ds);
 
-		Datasource result = datasourceController.getDatasourceById(1);
+		Datasource result = datasourceController.getDatasourceById(1, authentication);
 
 		assertEquals("test", result.getName());
 	}
 
 	@Test
 	void getAllDatasource_noParams_returnsAll() {
-		when(datasourceService.getAllDatasource()).thenReturn(List.of(Datasource.builder().id(1).build()));
+		when(datasourceService.getAllDatasource(1L)).thenReturn(List.of(Datasource.builder().id(1).build()));
 
-		List<Datasource> result = datasourceController.getAllDatasource(null, null);
+		List<Datasource> result = datasourceController.getAllDatasource(null, null, authentication);
 
 		assertEquals(1, result.size());
 	}
 
 	@Test
 	void getAllDatasource_withStatus_returnsByStatus() {
-		when(datasourceService.getDatasourceByStatus("active"))
+		when(datasourceService.getDatasourceByStatus("active", 1L))
 			.thenReturn(List.of(Datasource.builder().id(1).build()));
 
-		List<Datasource> result = datasourceController.getAllDatasource("active", null);
+		List<Datasource> result = datasourceController.getAllDatasource("active", null, authentication);
 
 		assertEquals(1, result.size());
-		verify(datasourceService).getDatasourceByStatus("active");
+		verify(datasourceService).getDatasourceByStatus("active", 1L);
 	}
 
 	@Test
 	void getAllDatasource_withType_returnsByType() {
-		when(datasourceService.getDatasourceByType("mysql")).thenReturn(List.of(Datasource.builder().id(1).build()));
+		when(datasourceService.getDatasourceByType("mysql", 1L))
+			.thenReturn(List.of(Datasource.builder().id(1).build()));
 
-		List<Datasource> result = datasourceController.getAllDatasource(null, "mysql");
+		List<Datasource> result = datasourceController.getAllDatasource(null, "mysql", authentication);
 
 		assertEquals(1, result.size());
-		verify(datasourceService).getDatasourceByType("mysql");
+		verify(datasourceService).getDatasourceByType("mysql", 1L);
 	}
 
 	@Test
@@ -328,9 +346,10 @@ class DatasourceControllerTest {
 
 	@Test
 	void getDatasourceTables_nonExisting_throwsNotFound() {
-		when(datasourceService.getDatasourceById(999)).thenReturn(null);
+		when(ownershipService.requireDatasource(999, authentication))
+			.thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND));
 
-		assertThrows(ResponseStatusException.class, () -> datasourceController.getDatasourceTables(999));
+		assertThrows(ResponseStatusException.class, () -> datasourceController.getDatasourceTables(999, authentication));
 	}
 
 	@Test
@@ -338,15 +357,16 @@ class DatasourceControllerTest {
 		when(datasourceService.getDatasourceById(1)).thenReturn(Datasource.builder().id(1).build());
 		when(datasourceService.getDatasourceTables(1)).thenThrow(new RuntimeException("conn error"));
 
-		assertThrows(ResponseStatusException.class, () -> datasourceController.getDatasourceTables(1));
+		assertThrows(ResponseStatusException.class, () -> datasourceController.getDatasourceTables(1, authentication));
 	}
 
 	@Test
 	void updateDatasource_nonExisting_throwsNotFound() {
-		when(datasourceService.getDatasourceById(999)).thenReturn(null);
+		when(ownershipService.requireDatasource(999, authentication))
+			.thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND));
 
 		assertThrows(ResponseStatusException.class,
-				() -> datasourceController.updateDatasource(999, Datasource.builder().build()));
+				() -> datasourceController.updateDatasource(999, Datasource.builder().build(), authentication));
 	}
 
 	@Test
@@ -355,7 +375,7 @@ class DatasourceControllerTest {
 		when(datasourceService.updateDatasource(eq(1), any())).thenThrow(new RuntimeException("update error"));
 
 		assertThrows(ResponseStatusException.class,
-				() -> datasourceController.updateDatasource(1, Datasource.builder().build()));
+				() -> datasourceController.updateDatasource(1, Datasource.builder().build(), authentication));
 	}
 
 	@Test
@@ -363,16 +383,17 @@ class DatasourceControllerTest {
 		when(datasourceService.getDatasourceById(1)).thenReturn(Datasource.builder().id(1).build());
 		doNothing().when(datasourceService).deleteDatasource(1);
 
-		ApiResponse result = datasourceController.deleteDatasource(1);
+		ApiResponse result = datasourceController.deleteDatasource(1, authentication);
 
 		assertTrue(result.isSuccess());
 	}
 
 	@Test
 	void deleteDatasource_nonExisting_throwsInvalidInputException() {
-		when(datasourceService.getDatasourceById(999)).thenReturn(null);
+		when(ownershipService.requireDatasource(999, authentication))
+			.thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND));
 
-		assertThrows(InvalidInputException.class, () -> datasourceController.deleteDatasource(999));
+		assertThrows(InvalidInputException.class, () -> datasourceController.deleteDatasource(999, authentication));
 	}
 
 	@Test
@@ -380,7 +401,7 @@ class DatasourceControllerTest {
 		when(datasourceService.getDatasourceById(1)).thenReturn(Datasource.builder().id(1).build());
 		doThrow(new RuntimeException("delete error")).when(datasourceService).deleteDatasource(1);
 
-		assertThrows(InternalServerException.class, () -> datasourceController.deleteDatasource(1));
+		assertThrows(InternalServerException.class, () -> datasourceController.deleteDatasource(1, authentication));
 	}
 
 }

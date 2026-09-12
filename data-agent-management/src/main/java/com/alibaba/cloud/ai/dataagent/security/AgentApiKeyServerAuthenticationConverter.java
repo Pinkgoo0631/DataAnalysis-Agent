@@ -33,13 +33,16 @@ public class AgentApiKeyServerAuthenticationConverter implements ServerAuthentic
 
 	@Override
 	public Mono<Authentication> convert(ServerWebExchange exchange) {
+		String apiKey = extractApiKey(exchange);
+		if (!StringUtils.hasText(apiKey)) {
+			return Mono.empty();
+		}
 		String agentId = exchange.getRequest().getQueryParams().getFirst("agentId");
 		if (!StringUtils.hasText(agentId)) {
 			return Mono.error(new BadCredentialsException("agentId is required"));
 		}
 		try {
-			return Mono
-				.just(AgentApiKeyAuthenticationToken.unauthenticated(Long.valueOf(agentId), extractApiKey(exchange)));
+			return Mono.just(AgentApiKeyAuthenticationToken.unauthenticated(Long.valueOf(agentId), apiKey));
 		}
 		catch (NumberFormatException ex) {
 			return Mono.error(new BadCredentialsException("Invalid agent API credentials", ex));

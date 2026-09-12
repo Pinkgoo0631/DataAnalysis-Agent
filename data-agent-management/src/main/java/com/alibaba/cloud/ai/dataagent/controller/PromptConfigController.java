@@ -18,6 +18,10 @@ package com.alibaba.cloud.ai.dataagent.controller;
 import com.alibaba.cloud.ai.dataagent.dto.prompt.PromptConfigDTO;
 import com.alibaba.cloud.ai.dataagent.entity.UserPromptConfig;
 import com.alibaba.cloud.ai.dataagent.service.prompt.UserPromptService;
+import com.alibaba.cloud.ai.dataagent.service.auth.ResourceOwnershipService;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -34,15 +38,17 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/prompt-config")
-@CrossOrigin(origins = "*", maxAge = 3600)
 public class PromptConfigController {
 
 	private static final Logger logger = LoggerFactory.getLogger(PromptConfigController.class);
 
 	private final UserPromptService promptConfigService;
 
-	public PromptConfigController(UserPromptService promptConfigService) {
+	private final ResourceOwnershipService ownershipService;
+
+	public PromptConfigController(UserPromptService promptConfigService, ResourceOwnershipService ownershipService) {
 		this.promptConfigService = promptConfigService;
+		this.ownershipService = ownershipService;
 	}
 
 	/**
@@ -51,10 +57,15 @@ public class PromptConfigController {
 	 * @return operation result
 	 */
 	@PostMapping("/save")
-	public ResponseEntity<Map<String, Object>> saveConfig(@RequestBody PromptConfigDTO configDTO) {
+	public ResponseEntity<Map<String, Object>> saveConfig(@RequestBody PromptConfigDTO configDTO,
+			Authentication authentication) {
 		logger.info("保存提示词优化配置请求：{}", configDTO);
+		Long userId = ownershipService.userId(authentication);
+		if (configDTO.agentId() != null) {
+			ownershipService.requireAgent(configDTO.agentId(), authentication);
+		}
 
-		UserPromptConfig savedConfig = promptConfigService.saveOrUpdateConfig(configDTO);
+		UserPromptConfig savedConfig = promptConfigService.saveOrUpdateConfig(configDTO, userId);
 
 		Map<String, Object> response = new HashMap<>();
 		response.put("success", true);
@@ -70,8 +81,9 @@ public class PromptConfigController {
 	 * @return configuration information
 	 */
 	@GetMapping("/{id}")
-	public ResponseEntity<Map<String, Object>> getConfig(@PathVariable(value = "id") String id) {
-		UserPromptConfig config = promptConfigService.getConfigById(id);
+	public ResponseEntity<Map<String, Object>> getConfig(@PathVariable(value = "id") String id,
+			Authentication authentication) {
+		UserPromptConfig config = promptConfigService.getConfigById(id, ownershipService.userId(authentication));
 
 		Map<String, Object> response = new HashMap<>();
 		if (config != null) {
@@ -91,8 +103,8 @@ public class PromptConfigController {
 	 * @return configuration list
 	 */
 	@GetMapping("/list")
-	public ResponseEntity<Map<String, Object>> getAllConfigs() {
-		List<UserPromptConfig> configs = promptConfigService.getAllConfigs();
+	public ResponseEntity<Map<String, Object>> getAllConfigs(Authentication authentication) {
+		List<UserPromptConfig> configs = promptConfigService.getAllConfigs(ownershipService.userId(authentication));
 
 		Map<String, Object> response = new HashMap<>();
 		response.put("success", true);
@@ -110,8 +122,10 @@ public class PromptConfigController {
 	 */
 	@GetMapping("/list-by-type/{promptType}")
 	public ResponseEntity<Map<String, Object>> getConfigsByType(@PathVariable(value = "promptType") String promptType,
-			@RequestParam(value = "agentId", required = false) Long agentId) {
-		List<UserPromptConfig> configs = promptConfigService.getConfigsByType(promptType, agentId);
+			@RequestParam(value = "agentId", required = false) Long agentId, Authentication authentication) {
+		if (agentId != null) ownershipService.requireAgent(agentId, authentication);
+		List<UserPromptConfig> configs = promptConfigService.getConfigsByType(promptType, agentId,
+				ownershipService.userId(authentication));
 
 		Map<String, Object> response = new HashMap<>();
 		response.put("success", true);
@@ -129,8 +143,11 @@ public class PromptConfigController {
 	 */
 	@GetMapping("/active/{promptType}")
 	public ResponseEntity<Map<String, Object>> getActiveConfig(@PathVariable(value = "promptType") String promptType,
-			@RequestParam(value = "agentId", required = false) Long agentId) {
-		UserPromptConfig config = promptConfigService.getActiveConfigByType(promptType, agentId);
+			@RequestParam(value = "agentId", required = false) Long agentId, Authentication authentication) {
+		if (agentId != null) ownershipService.requireAgent(agentId, authentication);
+		UserPromptConfig config = promptConfigService
+			.getConfigsByType(promptType, agentId, ownershipService.userId(authentication))
+			.stream().filter(item -> Boolean.TRUE.equals(item.getEnabled())).findFirst().orElse(null);
 
 		Map<String, Object> response = new HashMap<>();
 		response.put("success", true);
@@ -148,8 +165,11 @@ public class PromptConfigController {
 	 */
 	@GetMapping("/active-all/{promptType}")
 	public ResponseEntity<Map<String, Object>> getActiveConfigs(@PathVariable(value = "promptType") String promptType,
-			@RequestParam(value = "agentId", required = false) Long agentId) {
-		List<UserPromptConfig> configs = promptConfigService.getActiveConfigsByType(promptType, agentId);
+			@RequestParam(value = "agentId", required = false) Long agentId, Authentication authentication) {
+		if (agentId != null) ownershipService.requireAgent(agentId, authentication);
+		List<UserPromptConfig> configs = promptConfigService
+			.getConfigsByType(promptType, agentId, ownershipService.userId(authentication))
+			.stream().filter(item -> Boolean.TRUE.equals(item.getEnabled())).toList();
 
 		Map<String, Object> response = new HashMap<>();
 		response.put("success", true);
@@ -166,7 +186,9 @@ public class PromptConfigController {
 	 * @return operation result
 	 */
 	@DeleteMapping("/{id}")
-	public ResponseEntity<Map<String, Object>> deleteConfig(@PathVariable(value = "id") String id) {
+	public ResponseEntity<Map<String, Object>> deleteConfig(@PathVariable(value = "id") String id,
+			Authentication authentication) {
+		requireOwnConfig(id, authentication);
 		boolean deleted = promptConfigService.deleteConfig(id);
 
 		Map<String, Object> response = new HashMap<>();
@@ -188,7 +210,9 @@ public class PromptConfigController {
 	 * @return operation result
 	 */
 	@PostMapping("/{id}/enable")
-	public ResponseEntity<Map<String, Object>> enableConfig(@PathVariable(value = "id") String id) {
+	public ResponseEntity<Map<String, Object>> enableConfig(@PathVariable(value = "id") String id,
+			Authentication authentication) {
+		requireOwnConfig(id, authentication);
 		boolean enabled = promptConfigService.enableConfig(id);
 
 		Map<String, Object> response = new HashMap<>();
@@ -210,7 +234,9 @@ public class PromptConfigController {
 	 * @return operation result
 	 */
 	@PostMapping("/{id}/disable")
-	public ResponseEntity<Map<String, Object>> disableConfig(@PathVariable(value = "id") String id) {
+	public ResponseEntity<Map<String, Object>> disableConfig(@PathVariable(value = "id") String id,
+			Authentication authentication) {
+		requireOwnConfig(id, authentication);
 		boolean disabled = promptConfigService.disableConfig(id);
 
 		Map<String, Object> response = new HashMap<>();
@@ -248,7 +274,9 @@ public class PromptConfigController {
 	 * @return 操作结果
 	 */
 	@PostMapping("/batch-enable")
-	public ResponseEntity<Map<String, Object>> batchEnableConfigs(@RequestBody List<String> ids) {
+	public ResponseEntity<Map<String, Object>> batchEnableConfigs(@RequestBody List<String> ids,
+			Authentication authentication) {
+		ids.forEach(id -> requireOwnConfig(id, authentication));
 		boolean success = promptConfigService.enableConfigs(ids);
 
 		Map<String, Object> response = new HashMap<>();
@@ -270,7 +298,9 @@ public class PromptConfigController {
 	 * @return 操作结果
 	 */
 	@PostMapping("/batch-disable")
-	public ResponseEntity<Map<String, Object>> batchDisableConfigs(@RequestBody List<String> ids) {
+	public ResponseEntity<Map<String, Object>> batchDisableConfigs(@RequestBody List<String> ids,
+			Authentication authentication) {
+		ids.forEach(id -> requireOwnConfig(id, authentication));
 		boolean success = promptConfigService.disableConfigs(ids);
 
 		Map<String, Object> response = new HashMap<>();
@@ -294,7 +324,8 @@ public class PromptConfigController {
 	 */
 	@PostMapping("/{id}/priority")
 	public ResponseEntity<Map<String, Object>> updatePriority(@PathVariable(value = "id") String id,
-			@RequestBody Map<String, Object> requestBody) {
+			@RequestBody Map<String, Object> requestBody, Authentication authentication) {
+		requireOwnConfig(id, authentication);
 		Integer priority = (Integer) requestBody.get("priority");
 		boolean success = promptConfigService.updatePriority(id, priority);
 
@@ -319,7 +350,8 @@ public class PromptConfigController {
 	 */
 	@PostMapping("/{id}/display-order")
 	public ResponseEntity<Map<String, Object>> updateDisplayOrder(@PathVariable(value = "id") String id,
-			@RequestBody Map<String, Object> requestBody) {
+			@RequestBody Map<String, Object> requestBody, Authentication authentication) {
+		requireOwnConfig(id, authentication);
 		Integer displayOrder = (Integer) requestBody.get("displayOrder");
 		boolean success = promptConfigService.updateDisplayOrder(id, displayOrder);
 
@@ -334,6 +366,14 @@ public class PromptConfigController {
 		}
 
 		return ResponseEntity.ok(response);
+	}
+
+	private UserPromptConfig requireOwnConfig(String id, Authentication authentication) {
+		UserPromptConfig config = promptConfigService.getConfigById(id, ownershipService.userId(authentication));
+		if (config == null) {
+			throw new ResponseStatusException(HttpStatus.NOT_FOUND, "配置不存在");
+		}
+		return config;
 	}
 
 }

@@ -29,12 +29,16 @@ public interface UserPromptService {
 	 */
 	UserPromptConfig saveOrUpdateConfig(PromptConfigDTO configDTO);
 
+	UserPromptConfig saveOrUpdateConfig(PromptConfigDTO configDTO, Long userId);
+
 	/**
 	 * Get configuration by ID
 	 * @param id configuration ID
 	 * @return configuration object, returns null if not exists
 	 */
 	UserPromptConfig getConfigById(String id);
+
+	UserPromptConfig getConfigById(String id, Long userId);
 
 	/**
 	 * 根据提示词类型和智能体获取所有启用的配置
@@ -58,6 +62,8 @@ public interface UserPromptService {
 	 */
 	List<UserPromptConfig> getAllConfigs();
 
+	List<UserPromptConfig> getAllConfigs(Long userId);
+
 	/**
 	 * Get all configurations by prompt type and agent
 	 * @param promptType prompt type
@@ -65,6 +71,8 @@ public interface UserPromptService {
 	 * @return configuration list
 	 */
 	List<UserPromptConfig> getConfigsByType(String promptType, Long agentId);
+
+	List<UserPromptConfig> getConfigsByType(String promptType, Long agentId, Long userId);
 
 	/**
 	 * Delete configuration

@@ -19,6 +19,7 @@ import com.alibaba.cloud.ai.dataagent.enums.ModelType;
 import com.alibaba.cloud.ai.dataagent.dto.ModelConfigDTO;
 import com.alibaba.cloud.ai.dataagent.service.aimodelconfig.ModelConfigDataService;
 import com.alibaba.cloud.ai.dataagent.service.aimodelconfig.ModelConfigOpsService;
+import com.alibaba.cloud.ai.dataagent.service.auth.ResourceOwnershipService;
 import com.alibaba.cloud.ai.dataagent.vo.ApiResponse;
 import com.alibaba.cloud.ai.dataagent.vo.ModelCheckVo;
 import jakarta.validation.Valid;
@@ -26,6 +27,7 @@ import lombok.AllArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import org.springframework.security.core.Authentication;
 
 @AllArgsConstructor
 @RestController
@@ -36,11 +38,14 @@ public class ModelConfigController {
 
 	private final ModelConfigOpsService modelConfigOpsService;
 
+	private final ResourceOwnershipService ownershipService;
+
 	// 1. 获取列表
 	@GetMapping("/list")
-	public ApiResponse<List<ModelConfigDTO>> list() {
+	public ApiResponse<List<ModelConfigDTO>> list(Authentication authentication) {
 		try {
-			return ApiResponse.success("获取模型配置列表成功", modelConfigDataService.listConfigs());
+			return ApiResponse.success("获取模型配置列表成功",
+					modelConfigDataService.listConfigs(ownershipService.userId(authentication)));
 		}
 		catch (Exception e) {
 			return ApiResponse.error("获取模型配置列表失败: " + e.getMessage());
@@ -49,9 +54,9 @@ public class ModelConfigController {
 
 	// 2. 新增配置
 	@PostMapping("/add")
-	public ApiResponse<String> add(@Valid @RequestBody ModelConfigDTO config) {
+	public ApiResponse<String> add(@Valid @RequestBody ModelConfigDTO config, Authentication authentication) {
 		try {
-			modelConfigDataService.addConfig(config);
+			modelConfigDataService.addConfig(config, ownershipService.userId(authentication));
 			return ApiResponse.success("配置已保存");
 		}
 		catch (Exception e) {
@@ -61,9 +66,9 @@ public class ModelConfigController {
 
 	// 3. 修改配置
 	@PutMapping("/update")
-	public ApiResponse<String> update(@Valid @RequestBody ModelConfigDTO config) {
+	public ApiResponse<String> update(@Valid @RequestBody ModelConfigDTO config, Authentication authentication) {
 		try {
-			modelConfigOpsService.updateAndRefresh(config);
+			modelConfigOpsService.updateAndRefresh(config, ownershipService.userId(authentication));
 			return ApiResponse.success("配置已更新");
 		}
 		catch (Exception e) {
@@ -73,9 +78,9 @@ public class ModelConfigController {
 
 	// 4. 删除配置
 	@DeleteMapping("/{id}")
-	public ApiResponse<String> delete(@PathVariable Integer id) {
+	public ApiResponse<String> delete(@PathVariable Integer id, Authentication authentication) {
 		try {
-			modelConfigDataService.deleteConfig(id);
+			modelConfigDataService.deleteConfig(id, ownershipService.userId(authentication));
 			return ApiResponse.success("配置已删除");
 		}
 		catch (Exception e) {
@@ -85,9 +90,9 @@ public class ModelConfigController {
 
 	// 5. 启用/切换配置
 	@PostMapping("/activate/{id}")
-	public ApiResponse<String> activate(@PathVariable Integer id) {
+	public ApiResponse<String> activate(@PathVariable Integer id, Authentication authentication) {
 		try {
-			modelConfigOpsService.activateConfig(id);
+			modelConfigOpsService.activateConfig(id, ownershipService.userId(authentication));
 			return ApiResponse.success("模型切换成功！");
 		}
 		catch (Exception e) {
@@ -99,9 +104,9 @@ public class ModelConfigController {
 	 * 6. 连通性测试 根据配置 ID 从服务端读取完整配置，避免前端回传脱敏凭据
 	 */
 	@PostMapping("/test/{id}")
-	public ApiResponse<String> testConnection(@PathVariable Integer id) {
+	public ApiResponse<String> testConnection(@PathVariable Integer id, Authentication authentication) {
 		try {
-			modelConfigOpsService.testConnection(id);
+			modelConfigOpsService.testConnection(id, ownershipService.userId(authentication));
 			return ApiResponse.success("连接测试成功！模型可用。");
 		}
 		catch (Exception e) {
@@ -114,11 +119,12 @@ public class ModelConfigController {
 	 * 7. 检查模型配置是否就绪（聊天模型和嵌入模型都需要配置）
 	 */
 	@GetMapping("/check-ready")
-	public ApiResponse<ModelCheckVo> checkReady() {
+	public ApiResponse<ModelCheckVo> checkReady(Authentication authentication) {
+		Long userId = ownershipService.userId(authentication);
 		// 检查聊天模型是否已配置且启用
-		ModelConfigDTO chatModel = modelConfigDataService.getActiveConfigByType(ModelType.CHAT);
+		ModelConfigDTO chatModel = modelConfigDataService.getActiveConfigByType(ModelType.CHAT, userId);
 		// 检查嵌入模型是否已配置且启用
-		ModelConfigDTO embeddingModel = modelConfigDataService.getActiveConfigByType(ModelType.EMBEDDING);
+		ModelConfigDTO embeddingModel = modelConfigDataService.getActiveConfigByType(ModelType.EMBEDDING, userId);
 
 		boolean chatModelReady = chatModel != null;
 		boolean embeddingModelReady = embeddingModel != null;

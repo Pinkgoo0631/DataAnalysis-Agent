@@ -27,6 +27,8 @@ import java.time.LocalDateTime;
 @Builder
 public class UserPromptConfig {
 
+	private Long userId;
+
 	/**
 	 * Configuration ID
 	 */

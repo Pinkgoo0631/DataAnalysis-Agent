@@ -23,6 +23,7 @@ import com.alibaba.cloud.ai.dataagent.entity.AgentKnowledge;
 import com.alibaba.cloud.ai.dataagent.enums.EmbeddingStatus;
 
 import com.alibaba.cloud.ai.dataagent.mapper.AgentKnowledgeMapper;
+import com.alibaba.cloud.ai.dataagent.mapper.AgentMapper;
 import com.alibaba.cloud.ai.dataagent.service.file.FileStorageService;
 import com.alibaba.cloud.ai.dataagent.vo.AgentKnowledgeVO;
 import com.alibaba.cloud.ai.dataagent.vo.PageResult;
@@ -49,6 +50,9 @@ class AgentKnowledgeServiceImplTest {
 	private AgentKnowledgeMapper agentKnowledgeMapper;
 
 	@Mock
+	private AgentMapper agentMapper;
+
+	@Mock
 	private FileStorageService fileStorageService;
 
 	@Mock
@@ -59,7 +63,7 @@ class AgentKnowledgeServiceImplTest {
 
 	@BeforeEach
 	void setUp() {
-		service = new AgentKnowledgeServiceImpl(agentKnowledgeMapper, fileStorageService, agentKnowledgeConverter,
+		service = new AgentKnowledgeServiceImpl(agentKnowledgeMapper, agentMapper, fileStorageService, agentKnowledgeConverter,
 				eventPublisher);
 	}
 

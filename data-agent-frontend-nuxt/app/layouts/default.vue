@@ -265,15 +265,15 @@
 							</div>
 						</v-list>
 
-						<!-- <div class="pa-2 border-t border-white/5">
-							<v-list-item class="rounded-lg navigation-item logout-item" color="red-lighten-2" @click="logout">
+						<div class="pa-2 border-t border-white/5">
+							<v-list-item class="rounded-lg navigation-item logout-item" color="red-lighten-2" @click="handleLogout">
 								<template #prepend>
 									<v-avatar size="24" color="grey-darken-3"><v-icon icon="mdi-account" size="14" color="white" /></v-avatar>
 								</template>
-								<v-list-item-title class="text-caption font-weight-bold ms-2">root</v-list-item-title>
+								<v-list-item-title class="text-caption font-weight-bold ms-2">{{ authStore.user?.username }}</v-list-item-title>
 								<template #append><v-icon icon="mdi-logout" size="24" color="red" /></template>
 							</v-list-item>
-						</div> -->
+						</div>
 					</div>
 				</template>
 
@@ -314,9 +314,11 @@
 import BaseDrawer from '../components/BaseDrawer/index.vue';
 import agentService from '~/services/agent/index';
 import modelConfigService from '~/services/modelConfig/index';
+import { useAuthStore } from '~/stores/auth';
 import { useDisplay } from 'vuetify';
 
 const { dialogState, handleGlobalConfirm } = useConfirm();
+const authStore = useAuthStore();
 const drawer = ref(true);
 const { mobile } = useDisplay();
 const router = useRouter();
@@ -444,6 +446,11 @@ function handleAgentSwitch(value: number | string | undefined) {
 }
 
 const isActive = (path: string) => route.path === path;
+
+async function handleLogout() {
+	await authStore.logout();
+	await router.replace('/login');
+}
 
 async function loadGlobalModelName() {
 	try {

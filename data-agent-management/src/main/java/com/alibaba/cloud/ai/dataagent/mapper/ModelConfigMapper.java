@@ -32,12 +32,21 @@ public interface ModelConfigMapper {
 	List<ModelConfig> findAll();
 
 	@Select("""
+			SELECT * FROM model_config
+			WHERE user_id = #{userId} AND is_deleted = 0 ORDER BY created_time DESC
+			""")
+	List<ModelConfig> findAllByUserId(@Param("userId") Long userId);
+
+	@Select("""
 			SELECT id, provider, base_url, api_key, model_name, temperature, is_active, max_tokens,
 			       model_type, completions_path, embeddings_path, created_time, updated_time, is_deleted,
 			       proxy_enabled, proxy_host, proxy_port, proxy_username, proxy_password
 			FROM model_config WHERE id = #{id} AND is_deleted = 0
 			""")
 	ModelConfig findById(Integer id);
+
+	@Select("SELECT * FROM model_config WHERE id = #{id} AND user_id = #{userId} AND is_deleted = 0")
+	ModelConfig findByIdAndUserId(@Param("id") Integer id, @Param("userId") Long userId);
 
 	@Select("""
 			SELECT id, provider, base_url, api_key, model_name, temperature, is_active, max_tokens,
@@ -47,8 +56,23 @@ public interface ModelConfigMapper {
 			""")
 	ModelConfig selectActiveByType(@Param("modelType") String modelType);
 
+	@Select("""
+			SELECT * FROM model_config
+			WHERE user_id = #{userId} AND model_type = #{modelType}
+			  AND is_active = 1 AND is_deleted = 0 LIMIT 1
+			""")
+	ModelConfig selectActiveByTypeAndUserId(@Param("modelType") String modelType, @Param("userId") Long userId);
+
 	@Update("UPDATE model_config SET is_active = 0 WHERE model_type = #{modelType} AND id != #{currentId} AND is_deleted = 0")
 	void deactivateOthers(@Param("modelType") String modelType, @Param("currentId") Integer currentId);
+
+	@Update("""
+			UPDATE model_config SET is_active = 0
+			WHERE user_id = #{userId} AND model_type = #{modelType}
+			  AND id != #{currentId} AND is_deleted = 0
+			""")
+	void deactivateOthersForUser(@Param("modelType") String modelType, @Param("currentId") Integer currentId,
+			@Param("userId") Long userId);
 
 	@Select("""
 			<script>
@@ -86,10 +110,10 @@ public interface ModelConfigMapper {
 	@Insert("""
 			INSERT INTO model_config (provider, base_url, api_key, model_name, temperature, is_active, max_tokens,
 			                         model_type, completions_path, embeddings_path, created_time, updated_time, is_deleted,
-			                         proxy_enabled, proxy_host, proxy_port, proxy_username, proxy_password)
+			                         proxy_enabled, proxy_host, proxy_port, proxy_username, proxy_password, user_id)
 			VALUES (#{provider}, #{baseUrl}, #{apiKey}, #{modelName}, #{temperature}, #{isActive}, #{maxTokens},
 			        #{modelType}, #{completionsPath}, #{embeddingsPath}, NOW(), NOW(), 0,
-			        #{proxyEnabled}, #{proxyHost}, #{proxyPort}, #{proxyUsername}, #{proxyPassword})
+			        #{proxyEnabled}, #{proxyHost}, #{proxyPort}, #{proxyUsername}, #{proxyPassword}, #{userId})
 			""")
 	@Options(useGeneratedKeys = true, keyProperty = "id", keyColumn = "id")
 	int insert(ModelConfig modelConfig);

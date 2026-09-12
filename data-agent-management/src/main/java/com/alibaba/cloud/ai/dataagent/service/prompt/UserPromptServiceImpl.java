@@ -39,12 +39,18 @@ public class UserPromptServiceImpl implements UserPromptService {
 
 	@Override
 	public UserPromptConfig saveOrUpdateConfig(PromptConfigDTO configDTO) {
+		return saveOrUpdateConfig(configDTO, null);
+	}
+
+	@Override
+	public UserPromptConfig saveOrUpdateConfig(PromptConfigDTO configDTO, Long userId) {
 		log.info("保存或更新提示词优化配置：{}", configDTO);
 
 		UserPromptConfig config;
 		if (configDTO.id() != null) {
 			// Update existing configuration
-			config = userPromptConfigMapper.selectById(configDTO.id());
+			config = userId == null ? userPromptConfigMapper.selectById(configDTO.id())
+					: userPromptConfigMapper.selectByIdAndUserId(configDTO.id(), userId);
 			if (config != null) {
 				config.setName(configDTO.name());
 				config.setAgentId(configDTO.agentId());
@@ -58,6 +64,7 @@ public class UserPromptServiceImpl implements UserPromptService {
 			else {
 				// ID不存在，创建新配置
 				config = new UserPromptConfig();
+				config.setUserId(userId);
 				config.setId(configDTO.id());
 				config.setName(configDTO.name());
 				config.setPromptType(configDTO.promptType());
@@ -74,6 +81,7 @@ public class UserPromptServiceImpl implements UserPromptService {
 		else {
 			// Create new configuration
 			config = new UserPromptConfig();
+			config.setUserId(userId);
 			config.setId(UUID.randomUUID().toString());
 			config.setName(configDTO.name());
 			config.setPromptType(configDTO.promptType());
@@ -102,6 +110,11 @@ public class UserPromptServiceImpl implements UserPromptService {
 	}
 
 	@Override
+	public UserPromptConfig getConfigById(String id, Long userId) {
+		return userPromptConfigMapper.selectByIdAndUserId(id, userId);
+	}
+
+	@Override
 	public List<UserPromptConfig> getActiveConfigsByType(String promptType, Long agentId) {
 		return userPromptConfigMapper.getActiveConfigsByType(promptType, agentId);
 	}
@@ -117,8 +130,18 @@ public class UserPromptServiceImpl implements UserPromptService {
 	}
 
 	@Override
+	public List<UserPromptConfig> getAllConfigs(Long userId) {
+		return userPromptConfigMapper.selectAllByUserId(userId);
+	}
+
+	@Override
 	public List<UserPromptConfig> getConfigsByType(String promptType, Long agentId) {
 		return userPromptConfigMapper.getConfigsByType(promptType, agentId);
+	}
+
+	@Override
+	public List<UserPromptConfig> getConfigsByType(String promptType, Long agentId, Long userId) {
+		return userPromptConfigMapper.getConfigsByTypeAndUserId(promptType, agentId, userId);
 	}
 
 	@Override
