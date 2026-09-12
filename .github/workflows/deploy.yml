@@ -45,12 +45,31 @@ jobs:
     runs-on: [self-hosted, linux, x64, dataagent-server]
     timeout-minutes: 90
     steps:
-      - name: Clone latest main (shallow)
+      - name: Fetch triggering commit (shallow, with retry)
         run: |
           SRC="$RUNNER_TEMP/data-agent-src"
-          rm -rf "$SRC"
-          git clone --depth 1 --branch main \
-            https://github.com/Pinkgoo0631/DataAnalysis-Agent.git "$SRC"
+          REPO_URL="https://github.com/$GITHUB_REPOSITORY.git"
+          fetched=false
+          for attempt in 1 2 3; do
+            echo "fetch attempt $attempt/3 for $GITHUB_SHA"
+            rm -rf "$SRC"
+            mkdir -p "$SRC"
+            git -C "$SRC" init --quiet
+            git -C "$SRC" remote add origin "$REPO_URL"
+            if timeout 180s git -C "$SRC" -c http.version=HTTP/1.1 \
+              fetch --depth 1 --no-tags origin "$GITHUB_SHA"; then
+              git -C "$SRC" checkout --quiet --detach FETCH_HEAD
+              fetched=true
+              break
+            fi
+            echo "::warning::GitHub fetch attempt $attempt failed"
+            sleep $((attempt * 10))
+          done
+          if [ "$fetched" != true ]; then
+            echo "failed to fetch $GITHUB_SHA after 3 attempts"
+            exit 1
+          fi
+          test "$(git -C "$SRC" rev-parse HEAD)" = "$GITHUB_SHA"
           git -C "$SRC" log -1 --format='deploying %h (%s)'
 
       - name: Ensure app network and attach mysql0631
