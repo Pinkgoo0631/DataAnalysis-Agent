@@ -83,8 +83,20 @@ jobs:
           AI_DASHSCOPE_API_KEY: ${{ secrets.AI_DASHSCOPE_API_KEY }}
         run: |
           SRC="$RUNNER_TEMP/data-agent-src"
-          docker compose -f "$SRC/docker-file/docker-compose.yml" \
-            up -d --build --remove-orphans
+          COMPOSE_FILE="$SRC/docker-file/docker-compose.yml"
+          for attempt in 1 2; do
+            echo "docker compose attempt $attempt/2"
+            if docker compose -f "$COMPOSE_FILE" \
+              up -d --build --remove-orphans; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 2 ]; then
+              echo "docker compose failed after 2 attempts"
+              exit 1
+            fi
+            echo "::warning::Docker build/start failed; retrying with cached layers"
+            sleep 20
+          done
 
       - name: Wait for backend health
         run: |
