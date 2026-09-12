@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpHeaders;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.server.WebFilterChainProxy;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -99,7 +100,13 @@ class WebFluxSecurityConfigurationTest {
 
 	@Test
 	void managementEndpoint_withoutSession_returnsUnauthorized() {
-		webTestClient.get().uri("/api/agent/list").exchange().expectStatus().isUnauthorized();
+		webTestClient.get()
+			.uri("/api/agent/list")
+			.exchange()
+			.expectStatus()
+			.isUnauthorized()
+			.expectHeader()
+			.doesNotExist(HttpHeaders.WWW_AUTHENTICATE);
 	}
 
 }

@@ -32,6 +32,7 @@ import org.springframework.security.web.server.context.NoOpServerSecurityContext
 import org.springframework.security.web.server.context.ServerSecurityContextRepository;
 import org.springframework.security.web.server.context.WebSessionServerSecurityContextRepository;
 import org.springframework.security.web.server.csrf.CookieServerCsrfTokenRepository;
+import org.springframework.security.web.server.csrf.ServerCsrfTokenRequestAttributeHandler;
 import org.springframework.security.web.server.util.matcher.PathPatternParserServerWebExchangeMatcher;
 
 @Configuration(proxyBeanMethods = false)
@@ -67,10 +68,21 @@ public class WebFluxSecurityConfiguration {
 			}));
 
 		CookieServerCsrfTokenRepository csrfRepository = CookieServerCsrfTokenRepository.withHttpOnlyFalse();
-		return http.csrf(csrf -> csrf.csrfTokenRepository(csrfRepository))
+		ServerCsrfTokenRequestAttributeHandler csrfRequestHandler = new ServerCsrfTokenRequestAttributeHandler();
+		return http.csrf(csrf -> csrf.csrfTokenRepository(csrfRepository)
+			.csrfTokenRequestHandler(csrfRequestHandler))
 			.httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
 			.formLogin(ServerHttpSecurity.FormLoginSpec::disable)
 			.logout(ServerHttpSecurity.LogoutSpec::disable)
+			.exceptionHandling(exceptions -> exceptions
+				.authenticationEntryPoint((exchange, ex) -> {
+					exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+					return exchange.getResponse().setComplete();
+				})
+				.accessDeniedHandler((exchange, ex) -> {
+					exchange.getResponse().setStatusCode(HttpStatus.FORBIDDEN);
+					return exchange.getResponse().setComplete();
+				}))
 			.securityContextRepository(securityContextRepository)
 			.authorizeExchange(exchange -> exchange.pathMatchers("/api/auth/login", "/api/auth/register",
 					"/api/auth/csrf", "/api/echo/ok")
