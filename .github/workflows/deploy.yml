@@ -45,20 +45,25 @@ jobs:
     runs-on: [self-hosted, linux, x64, dataagent-server]
     timeout-minutes: 90
     steps:
-      - name: Fetch triggering commit (shallow, with retry)
+      - name: Update persistent checkout (shallow, with retry)
         run: |
-          SRC="$RUNNER_TEMP/data-agent-src"
+          SRC="$GITHUB_WORKSPACE"
           REPO_URL="https://github.com/$GITHUB_REPOSITORY.git"
-          fetched=false
-          for attempt in 1 2 3; do
-            echo "fetch attempt $attempt/3 for $GITHUB_SHA"
+          if [ ! -d "$SRC/.git" ]; then
             rm -rf "$SRC"
             mkdir -p "$SRC"
             git -C "$SRC" init --quiet
             git -C "$SRC" remote add origin "$REPO_URL"
+          else
+            git -C "$SRC" remote set-url origin "$REPO_URL"
+          fi
+          fetched=false
+          for attempt in 1 2 3; do
+            echo "fetch attempt $attempt/3 for $GITHUB_SHA"
             if timeout 180s git -C "$SRC" -c http.version=HTTP/1.1 \
-              fetch --depth 1 --no-tags origin "$GITHUB_SHA"; then
-              git -C "$SRC" checkout --quiet --detach FETCH_HEAD
+              fetch --force --prune --depth 2 --no-tags origin "$GITHUB_SHA"; then
+              git -C "$SRC" checkout --quiet --force --detach FETCH_HEAD
+              git -C "$SRC" clean -fdx
               fetched=true
               break
             fi
@@ -82,7 +87,7 @@ jobs:
         env:
           AI_DASHSCOPE_API_KEY: ${{ secrets.AI_DASHSCOPE_API_KEY }}
         run: |
-          SRC="$RUNNER_TEMP/data-agent-src"
+          SRC="$GITHUB_WORKSPACE"
           COMPOSE_FILE="$SRC/docker-file/docker-compose.yml"
           for attempt in 1 2; do
             echo "docker compose attempt $attempt/2"
