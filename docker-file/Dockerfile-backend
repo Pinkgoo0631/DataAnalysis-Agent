@@ -46,8 +46,9 @@ RUN apt update && apt install -y maven git
 COPY . /app/DataAgent
 
 # 进入项目目录并构建
+# --mount=type=cache 复用 BuildKit 缓存，避免失败重跑时重复下载依赖
 WORKDIR /app/DataAgent
-RUN mvn install -DskipTests
+RUN --mount=type=cache,target=/root/.m2 mvn install -DskipTests
 #    mvn install -DskipTests -s ../aliyun-settings.xml
 
 FROM eclipse-temurin:17-jdk-jammy

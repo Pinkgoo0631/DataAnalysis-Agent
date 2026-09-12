@@ -13,28 +13,30 @@
 #limitations under the License.
 
 # 构建阶段
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# 复制源代码
-COPY data-agent-frontend .
+# 启用 pnpm
+RUN corepack enable
 
-# 安装依赖
-RUN npm install
+# 复制前端源码（真实目录名是 data-agent-frontend-nuxt）
+COPY data-agent-frontend-nuxt .
 
-# 构建生产版本
-RUN npm run build
+# 使用 pnpm 按锁文件安装依赖，保证可复现
+RUN pnpm install --frozen-lockfile
 
+# 构建 SPA 静态站（generate 会产出顶层 index.html + 各路由 html + 200/404 兜底）
+RUN pnpm run generate
 
-# 运行阶段
+# 运行阶段：nginx 静态托管
 FROM nginx:alpine
 
-# 复制构建结果到nginx目录
-COPY --from=builder /app/dist /usr/share/nginx/html
+# 复制构建产物到 nginx 目录（Nuxt ssr:false 的静态资源位于 .output/public）
+COPY --from=builder /app/.output/public /usr/share/nginx/html
 
 # 暴露端口
 EXPOSE 3000
 
-# 启动nginx
+# 启动 nginx
 CMD ["nginx", "-g", "daemon off;"]
