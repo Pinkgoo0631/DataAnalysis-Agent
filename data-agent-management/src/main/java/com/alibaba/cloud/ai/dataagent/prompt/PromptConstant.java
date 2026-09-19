@@ -34,6 +34,11 @@ public class PromptConstant {
 		return new PromptTemplate(PromptLoader.loadPrompt("evidence-query-rewrite"));
 	}
 
+	// rerank
+	public static PromptTemplate getRerankPromptTemplate() {
+		return new PromptTemplate(PromptLoader.loadPrompt("rerank"));
+	}
+
 	// agent-knowledge.txt
 	public static PromptTemplate getAgentKnowledgePromptTemplate() {
 		return new PromptTemplate(PromptLoader.loadPrompt("agent-knowledge"));

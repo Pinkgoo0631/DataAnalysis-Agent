@@ -164,6 +164,11 @@ public class DataAgentConfiguration implements DisposableBean {
 			keyStrategyHashMap.put(GENEGRATED_SEMANTIC_MODEL_PROMPT, KeyStrategy.REPLACE);
 			// EVIDENCE节点输出
 			keyStrategyHashMap.put(EVIDENCE, KeyStrategy.REPLACE);
+			// 证据召回候选文档（EvidenceRecallNode 写出，RerankNode 精排后回写）
+			keyStrategyHashMap.put(EVIDENCE_DOCUMENTS, KeyStrategy.REPLACE);
+			keyStrategyHashMap.put(EVIDENCE_QUERY, KeyStrategy.REPLACE);
+			// Rerank 精排开关
+			keyStrategyHashMap.put(IS_RERANK, KeyStrategy.REPLACE);
 			// schema recall节点输出
 			keyStrategyHashMap.put(TABLE_DOCUMENTS_FOR_SCHEMA_OUTPUT, KeyStrategy.REPLACE);
 			keyStrategyHashMap.put(COLUMN_DOCUMENTS__FOR_SCHEMA_OUTPUT, KeyStrategy.REPLACE);
@@ -206,8 +211,6 @@ public class DataAgentConfiguration implements DisposableBean {
 			keyStrategyHashMap.put(HUMAN_FEEDBACK_DATA, KeyStrategy.REPLACE);
 			// Langfuse 追踪：threadId 透传
 			keyStrategyHashMap.put(TRACE_THREAD_ID, KeyStrategy.REPLACE);
-			// Customized Result Evaluation
-			keyStrategyHashMap.put(RESULT_EVALUATION, KeyStrategy.REPLACE);
 			// Final result
 			keyStrategyHashMap.put(RESULT, KeyStrategy.REPLACE);
 			keyStrategyHashMap.put(FINAL_ANSWER, KeyStrategy.REPLACE);
@@ -231,12 +234,14 @@ public class DataAgentConfiguration implements DisposableBean {
 			.addNode(REPORT_GENERATOR_NODE, nodeBeanUtil.getNodeBeanAsync(ReportGeneratorNode.class))
 			.addNode(SEMANTIC_CONSISTENCY_NODE, nodeBeanUtil.getNodeBeanAsync(SemanticConsistencyNode.class))
 			.addNode(HUMAN_FEEDBACK_NODE, nodeBeanUtil.getNodeBeanAsync(HumanFeedbackNode.class))
-			.addNode(RESULT_EVALUATION, nodeBeanUtil.getNodeBeanAsync(ResultEvaluationNode.class));
+			.addNode(RERANK_NODE, nodeBeanUtil.getNodeBeanAsync(RerankNode.class));
 
 		stateGraph.addEdge(START, INTENT_RECOGNITION_NODE)
 			.addConditionalEdges(INTENT_RECOGNITION_NODE, edge_async(new IntentRecognitionDispatcher()),
 					Map.of(EVIDENCE_RECALL_NODE, EVIDENCE_RECALL_NODE, END, END))
-			.addEdge(EVIDENCE_RECALL_NODE, QUERY_ENHANCE_NODE)
+			.addConditionalEdges(EVIDENCE_RECALL_NODE, edge_async(new RerankDispatcher()),
+					Map.of(RERANK_NODE, RERANK_NODE, QUERY_ENHANCE_NODE, QUERY_ENHANCE_NODE))
+			.addEdge(RERANK_NODE, QUERY_ENHANCE_NODE)
 			.addConditionalEdges(QUERY_ENHANCE_NODE, edge_async(new QueryEnhanceDispatcher()),
 					Map.of(SCHEMA_RECALL_NODE, SCHEMA_RECALL_NODE, END, END))
 			.addConditionalEdges(SCHEMA_RECALL_NODE, edge_async(new SchemaRecallDispatcher()),

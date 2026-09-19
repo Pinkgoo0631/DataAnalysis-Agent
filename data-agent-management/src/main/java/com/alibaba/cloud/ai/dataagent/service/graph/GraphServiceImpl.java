@@ -181,9 +181,12 @@ public class GraphServiceImpl implements GraphService {
 
 		String multiTurnContext = multiTurnContextManager.buildContext(conversationId);
 		multiTurnContextManager.beginTurn(conversationId, query);
+		// 精排开关暂写死为 true，后续可改为请求参数或智能体配置驱动
+		boolean isRerank = true;
 		Flux<NodeOutput> nodeOutputFlux = compiledGraph.stream(
 				Map.of(IS_ONLY_NL2SQL, nl2sqlOnly, INPUT_KEY, query, AGENT_ID, agentId, HUMAN_REVIEW_ENABLED,
-						humanReviewEnabled, MULTI_TURN_CONTEXT, multiTurnContext, TRACE_THREAD_ID, threadId),
+						humanReviewEnabled, MULTI_TURN_CONTEXT, multiTurnContext, TRACE_THREAD_ID, threadId, IS_RERANK,
+						isRerank),
 				RunnableConfig.builder().threadId(threadId).build());
 		subscribeToFlux(context, nodeOutputFlux, graphRequest, agentId, threadId);
 	}

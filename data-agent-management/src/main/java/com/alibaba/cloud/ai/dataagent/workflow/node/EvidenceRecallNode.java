@@ -16,12 +16,10 @@
 package com.alibaba.cloud.ai.dataagent.workflow.node;
 
 import com.alibaba.cloud.ai.dataagent.constant.DocumentMetadataConstant;
-import com.alibaba.cloud.ai.dataagent.enums.KnowledgeType;
 import com.alibaba.cloud.ai.dataagent.enums.TextType;
 import com.alibaba.cloud.ai.dataagent.dto.prompt.EvidenceQueryRewriteDTO;
-import com.alibaba.cloud.ai.dataagent.entity.AgentKnowledge;
-import com.alibaba.cloud.ai.dataagent.mapper.AgentKnowledgeMapper;
 import com.alibaba.cloud.ai.dataagent.prompt.PromptHelper;
+import com.alibaba.cloud.ai.dataagent.service.evidence.EvidenceContentBuilder;
 import com.alibaba.cloud.ai.dataagent.service.llm.LlmService;
 import com.alibaba.cloud.ai.dataagent.service.vectorstore.AgentVectorStoreService;
 import com.alibaba.cloud.ai.dataagent.util.*;
@@ -56,7 +54,7 @@ public class EvidenceRecallNode implements NodeAction {
 
 	private final JsonParseUtil jsonParseUtil;
 
-	private final AgentKnowledgeMapper agentKnowledgeMapper;
+	private final EvidenceContentBuilder evidenceContentBuilder;
 
 	@Override
 	public Map<String, Object> apply(OverAllState state) throws Exception {
@@ -72,7 +70,6 @@ public class EvidenceRecallNode implements NodeAction {
 		String multiTurn = StateUtil.getStringValue(state, MULTI_TURN_CONTEXT, "(无)");
 
 		// 构建查询重写提示
-		// 不需要扩展为多个子查询，因为此时LLM不能理解不同公司的个性化业务知识，比如 PV,KMV等专业名词，扩展反而引入噪音。
 		String prompt = PromptHelper.buildEvidenceQueryRewritePrompt(multiTurn, question);
 		log.debug("Built evidence-query-rewrite prompt as follows \n {} \n", prompt);
 
@@ -105,9 +102,8 @@ public class EvidenceRecallNode implements NodeAction {
 			if (null == standaloneQuery || standaloneQuery.isEmpty()) {
 				log.debug("No standalone query from LLM output");
 				sink.tryEmitNext("未能进行查询重写！\n");
-				return Map.of(EVIDENCE, "无");
+				return Map.of(EVIDENCE, "无", EVIDENCE_DOCUMENTS, List.of(), EVIDENCE_QUERY, "");
 			}
-
 			// 输出重写后的查询
 			outputRewrittenQuery(standaloneQuery, sink);
 
@@ -118,23 +114,24 @@ public class EvidenceRecallNode implements NodeAction {
 			if (retrievalResult.allDocuments().isEmpty()) {
 				log.debug("No evidence documents found for agent: {} with query: {}", agentId, standaloneQuery);
 				sink.tryEmitNext("未找到证据！\n");
-				return Map.of(EVIDENCE, "无");
+				return Map.of(EVIDENCE, "无", EVIDENCE_DOCUMENTS, List.of(), EVIDENCE_QUERY, standaloneQuery);
 			}
 
 			// 构建证据内容
-			String evidence = buildFormattedEvidenceContent(retrievalResult.businessTermDocuments(),
+			String evidence = evidenceContentBuilder.buildEvidenceContent(retrievalResult.businessTermDocuments(),
 					retrievalResult.agentKnowledgeDocuments());
 			log.debug("Evidence content built as follows \n {} \n", evidence);
 			// 输出证据内容
 			outputEvidenceContent(retrievalResult.allDocuments(), sink);
 
-			// 返回结果
-			return Map.of(EVIDENCE, evidence);
+			// 返回结果：同时输出候选文档，供下游 RerankNode 精排
+			return Map.of(EVIDENCE, evidence, EVIDENCE_DOCUMENTS, retrievalResult.allDocuments(), EVIDENCE_QUERY,
+					standaloneQuery);
 		}
 		catch (Exception e) {
 			log.error("Error occurred while getting evidences", e);
 			sink.tryEmitError(e);
-			return Map.of(EVIDENCE, "");
+			return Map.of(EVIDENCE, "", EVIDENCE_DOCUMENTS, List.of());
 		}
 		finally {
 			sink.tryEmitComplete();
@@ -173,152 +170,6 @@ public class EvidenceRecallNode implements NodeAction {
 				agentId, businessTermDocuments.size(), agentKnowledgeDocuments.size(), allDocuments.size());
 
 		return new DocumentRetrievalResult(businessTermDocuments, agentKnowledgeDocuments, allDocuments);
-	}
-
-	// 构建证据内容，输出格式
-	// 1. [来源: 2025Q3报告-销售数据.md] ...华东地区的增长主要来自于核心用户...
-	// 2. [来源: 客服FAQ] Q: 退款怎么算? A: 只统计已入库退货...
-	private String buildFormattedEvidenceContent(List<Document> businessTermDocuments,
-			List<Document> agentKnowledgeDocuments) {
-		// 构建业务知识内容
-		String businessKnowledgeContent = buildBusinessKnowledgeContent(businessTermDocuments);
-
-		// 构建智能体知识内容
-		String agentKnowledgeContent = buildAgentKnowledgeContent(agentKnowledgeDocuments);
-
-		// 使用PromptHelper的模板方法进行渲染
-		String businessPrompt = PromptHelper.buildBusinessKnowledgePrompt(businessKnowledgeContent);
-		String agentPrompt = PromptHelper.buildAgentKnowledgePrompt(agentKnowledgeContent);
-
-		// 添加证据构建日志
-		log.info("Building evidence content: business knowledge length {}, agent knowledge length {}",
-				businessKnowledgeContent.length(), agentKnowledgeContent.length());
-
-		// 拼接业务知识和智能体知识作为证据
-		return businessKnowledgeContent.isEmpty() && agentKnowledgeContent.isEmpty() ? "无"
-				: businessPrompt + (agentKnowledgeContent.isEmpty() ? "" : "\n\n" + agentPrompt);
-	}
-
-	private String buildBusinessKnowledgeContent(List<Document> businessTermDocuments) {
-		if (businessTermDocuments.isEmpty()) {
-			return "";
-		}
-
-		StringBuilder result = new StringBuilder();
-
-		// 直接使用Document的完整内容，每行一个Document
-		for (Document doc : businessTermDocuments) {
-			result.append(doc.getText()).append("\n");
-		}
-
-		return result.toString();
-	}
-
-	private String buildAgentKnowledgeContent(List<Document> agentKnowledgeDocuments) {
-		if (agentKnowledgeDocuments.isEmpty()) {
-			return "";
-		}
-
-		StringBuilder result = new StringBuilder();
-
-		for (int i = 0; i < agentKnowledgeDocuments.size(); i++) {
-			Document doc = agentKnowledgeDocuments.get(i);
-			Map<String, Object> metadata = doc.getMetadata();
-			String knowledgeType = (String) metadata.get(DocumentMetadataConstant.CONCRETE_AGENT_KNOWLEDGE_TYPE);
-
-			// 根据知识类型调用不同的处理方法
-			if (KnowledgeType.FAQ.getCode().equals(knowledgeType) || KnowledgeType.QA.getCode().equals(knowledgeType)) {
-				processFaqOrQaKnowledge(doc, i, result);
-			}
-			else {
-				processDocumentKnowledge(doc, i, result);
-			}
-		}
-
-		return result.toString();
-	}
-
-	/**
-	 * 处理FAQ或QA类型的知识
-	 */
-	private void processFaqOrQaKnowledge(Document doc, int index, StringBuilder result) {
-		Map<String, Object> metadata = doc.getMetadata();
-		String content = doc.getText();
-		Integer knowledgeId = ((Number) metadata.get(DocumentMetadataConstant.DB_AGENT_KNOWLEDGE_ID)).intValue();
-		String knowledgeType = (String) metadata.get(DocumentMetadataConstant.CONCRETE_AGENT_KNOWLEDGE_TYPE);
-
-		log.debug("Processing {} type knowledge with id: {}", knowledgeType, knowledgeId);
-
-		if (knowledgeId != null) {
-			try {
-				AgentKnowledge knowledge = agentKnowledgeMapper.selectById(knowledgeId);
-				if (knowledge != null) {
-					String title = knowledge.getTitle();
-					// 格式：[来源: xxx] Q: xxx A: xxx
-					result.append(index + 1).append(". [来源: ");
-					result.append(title.isEmpty() ? "知识库" : title);
-					result.append("] Q: ").append(content).append(" A: ").append(knowledge.getContent()).append("\n");
-
-					log.debug("Successfully processed {} knowledge with title: {}", knowledgeType, title);
-				}
-				else {
-					log.warn("Knowledge not found for id: {}", knowledgeId);
-				}
-			}
-			catch (Exception e) {
-				log.error("Error getting knowledge by id: {}", knowledgeId, e);
-				// 如果获取失败，使用原始内容
-				result.append(index + 1).append(". [来源: 知识库] ").append(content).append("\n");
-			}
-		}
-		else {
-			// 如果没有知识ID，使用原始内容
-			log.error("No knowledge id found for agent knowledge document: {}", doc.getId());
-			result.append(index + 1).append(". [来源: 知识库] ").append(content).append("\n");
-		}
-	}
-
-	/**
-	 * 处理DOCUMENT类型的知识
-	 */
-	private void processDocumentKnowledge(Document doc, int index, StringBuilder result) {
-		Map<String, Object> metadata = doc.getMetadata();
-		String content = doc.getText();
-		Integer knowledgeId = ((Number) metadata.get(DocumentMetadataConstant.DB_AGENT_KNOWLEDGE_ID)).intValue();
-		String knowledgeType = (String) metadata.get(DocumentMetadataConstant.CONCRETE_AGENT_KNOWLEDGE_TYPE);
-		String title = "";
-		String sourceFilename = "";
-
-		log.debug("Processing {} type knowledge with id: {}", knowledgeType, knowledgeId);
-
-		if (knowledgeId != null) {
-			try {
-				AgentKnowledge knowledge = agentKnowledgeMapper.selectById(knowledgeId);
-				if (knowledge != null) {
-					title = knowledge.getTitle();
-					sourceFilename = knowledge.getSourceFilename();
-
-					log.debug("Successfully processed {} knowledge with title: {}, source file: {}", knowledgeType,
-							title, sourceFilename);
-				}
-				else {
-					log.warn("Knowledge not found for id: {}", knowledgeId);
-				}
-			}
-			catch (Exception e) {
-				log.error("Error getting knowledge by id: {}", knowledgeId, e);
-			}
-		}
-
-		// 构建来源信息，格式为"标题-文件名"
-		String sourceInfo = title.isEmpty() ? "文档" : title;
-		if (!sourceFilename.isEmpty()) {
-			sourceInfo += "-" + sourceFilename;
-		}
-
-		result.append(index + 1).append(". [来源: ");
-		result.append(sourceInfo);
-		result.append("] ").append(content).append("\n");
 	}
 
 	private void outputEvidenceContent(List<Document> allDocuments, Sinks.Many<String> sink) {

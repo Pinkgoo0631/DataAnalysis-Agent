@@ -38,6 +38,7 @@ import com.alibaba.cloud.ai.dataagent.constant.DocumentMetadataConstant;
 import com.alibaba.cloud.ai.dataagent.entity.AgentKnowledge;
 import com.alibaba.cloud.ai.dataagent.enums.KnowledgeType;
 import com.alibaba.cloud.ai.dataagent.mapper.AgentKnowledgeMapper;
+import com.alibaba.cloud.ai.dataagent.service.evidence.EvidenceContentBuilder;
 import com.alibaba.cloud.ai.dataagent.service.llm.LlmService;
 import com.alibaba.cloud.ai.dataagent.service.vectorstore.AgentVectorStoreService;
 import com.alibaba.cloud.ai.dataagent.util.ChatResponseUtil;
@@ -75,7 +76,7 @@ class EvidenceRecallNodeTest {
 	@BeforeEach
 	void setUp() {
 		evidenceRecallNode = new EvidenceRecallNode(llmService, vectorStoreService, jsonParseUtil,
-				agentKnowledgeMapper);
+				new EvidenceContentBuilder(agentKnowledgeMapper));
 	}
 
 	private OverAllState createTestState() {

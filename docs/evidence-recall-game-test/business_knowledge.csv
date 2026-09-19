@@ -1,0 +1,21 @@
+evidence_id,business_term,description,synonyms,is_recall
+BK-01,实际销量,"证据标识：BK-01。实际销量对应 games.actual_sales，单位为万份，表示游戏累计售出的份数。求总销量使用 SUM(actual_sales)，求单款平均销量使用 AVG(actual_sales)。展示为“份”时需乘以 10000；不同平台售价差异很大，销量不等同于收入。","销量,售出份数,销售量,卖了多少份,units sold",1
+BK-02,总收入,"证据标识：BK-02。总收入对应 games.revenue，单位为万元。本测试库定义 revenue = price（元/份）× actual_sales（万份），量纲结果为万元。汇总收入直接 SUM(revenue)，不要再次乘以 price；该值未扣除平台分成、税费、退款、开发成本或营销成本，因此不是净收入或利润。","收入,销售收入,流水,营收,gross revenue",1
+BK-03,总资金投入,"证据标识：BK-03。总资金投入对应 games.total_investment，单位为万元，定义为 dev_budget + marketing_budget。若数据库已有 total_investment，应优先直接使用并可用两项之和做一致性校验。","总投入,总预算,项目投入,制作加营销预算,total investment",1
+BK-04,回本金额差,"证据标识：BK-04。回本金额差是测试库中的简化收益代理，计算为 revenue - total_investment，单位万元。结果大于等于 0 表示按当前简化口径已覆盖开发与营销投入；它不是会计利润，因为没有渠道分成、税费、退款、持续运营等成本。","毛收益代理,收入减投入,盈亏金额,投资回收额",1
+BK-05,总投入回报率,"证据标识：BK-05。总投入回报率（简化 ROI）= (revenue - total_investment) / total_investment × 100%。计算前排除 total_investment 为 0 的记录。该指标只适用于本测试库的粗粒度横向比较，不代表发行商真实净 ROI。","ROI,投资回报率,投入产出率,总预算回报率,return on investment",1
+BK-06,回本游戏,"证据标识：BK-06。回本游戏定义为 revenue >= total_investment；未回本游戏定义为 revenue < total_investment。该规则只使用测试库的简化总收入和开发加营销投入，不能替代真实损益表中的盈亏平衡分析。","盈亏平衡,收回成本,保本,break even,回本率",1
+BK-07,收入排行榜,"证据标识：BK-07。收入最高、营收冠军或收入 TopN 均按 games.revenue 降序排列；若题目限定年份、类型、平台或 IP，必须先应用过滤条件再排名。并列时先按 revenue 降序，再按 id 升序保证结果稳定。","营收榜,收入TopN,最赚钱,流水排行,revenue ranking",1
+BK-08,加权平均售价,"证据标识：BK-08。跨多款游戏的加权平均售价 = SUM(revenue) / SUM(actual_sales)，结果单位为元/份，因为 revenue 的单位是万元、actual_sales 的单位是万份。不能用 AVG(price) 代替销量加权售价；SUM(actual_sales)=0 时不计算。","平均成交价,销量加权价格,ASP,average selling price",1
+BK-09,营销销量效率,"证据标识：BK-09。营销销量效率 = actual_sales / marketing_budget，当前数据量纲可解释为每投入 1 万元营销预算带来的万份销量。用于排名时按该比值降序，并排除 marketing_budget 为 0；该比值是描述性指标，不可直接证明营销投入造成销量增长。","营销效率,宣发效率,获量效率,销量营销比,sales per marketing budget",1
+BK-10,开发收入效率,"证据标识：BK-10。开发收入效率 = revenue / dev_budget，表示每 1 万元开发预算对应的简化总收入。排除 dev_budget 为 0 的记录。该指标没有控制游戏类型、平台、售价、IP 和评分，只能用于初步筛选。","研发效率,制作费收入比,开发投入产出,revenue per dev budget",1
+BK-11,游戏类型,"证据标识：BK-11。游戏类型来自 game_types.name，games.type_id = game_types.id。按类型统计必须连接 game_types；当前十类为角色扮演RPG、动作、策略、射击、模拟经营、休闲益智、体育竞技、冒险解谜、竞速、生存恐怖。","品类,题材类型,玩法类型,genre,game category",1
+BK-12,主要发行平台,"证据标识：BK-12。主要发行平台来自 game_platforms.name，games.platform_id = game_platforms.id。当前平台为 PC、手机端、PlayStation、Xbox、Switch、VR。每款游戏只记录一个主要平台，因此不能据此分析同一游戏的跨平台销量拆分。","平台,游戏平台,发行端,终端,platform",1
+BK-13,知名IP或续作,"证据标识：BK-13。是否为知名 IP 或续作对应 games.is_ip：1 表示是，0 表示否。查询 IP 游戏必须使用 is_ip = 1；比较 IP 效应时至少同时报告两组样本量，避免只看均值。","IP游戏,知名IP,续作,系列作,franchise,sequel",1
+BK-14,高评分游戏,"证据标识：BK-14。为保持测试一致，本项目把 review_score >= 8.5 定义为高评分游戏，低于 8.5 为其他游戏。review_score 范围为 0 至 10。若用户另给阈值，应以用户阈值覆盖本默认口径。","高口碑,高分作品,好评游戏,评分优秀,high rated",1
+BK-15,投入规模分层,"证据标识：BK-15。按 total_investment（万元）划分投入档位：小型投入 < 3000；中型投入 >= 3000 且 < 10000；大型投入 >= 10000。边界值 3000 归中型，10000 归大型。","预算档位,投入分层,小成本,中等预算,大制作,budget tier",1
+BK-16,爆款游戏,"证据标识：BK-16。为测试数据问答，本项目把 actual_sales >= 500 万份定义为爆款；低于 500 万份不算爆款。该阈值是内部测试约定，不是行业统一标准。","畅销游戏,销量爆款,头部作品,hit title,blockbuster",1
+BK-17,近三年游戏,"证据标识：BK-17。近三年按数据集中最大 release_year 向前包含三个自然年计算，即 release_year BETWEEN MAX(release_year)-2 AND MAX(release_year)。当前数据最大年份为 2024，因此当前口径是 2022 至 2024 年。","最近三年,近年新作,近期发行,latest three years",1
+BK-18,类型收入占比,"证据标识：BK-18。某游戏类型收入占比 = 该类型 SUM(revenue) / 全部游戏 SUM(revenue) × 100%。若题目指定年份或平台，分子和分母必须使用相同过滤范围。","品类收入份额,类型营收贡献,genre revenue share,收入贡献率",1
+BK-19,IP收入溢价,"证据标识：BK-19。IP 收入溢价 = (IP 游戏平均 revenue - 非 IP 游戏平均 revenue) / 非 IP 游戏平均 revenue × 100%。必须同时报告 IP 与非 IP 样本量；这是未经平台、售价、类型等因素控制的描述性差异，不能称为因果提升。","IP溢价,续作收入提升,franchise premium,IP效应",1
+BK-20,销量预测目标,"证据标识：BK-20。预测下一款游戏销量时，目标变量是 games.actual_sales；候选特征包括 type_id、platform_id、dev_budget、marketing_budget、total_investment、team_size、dev_months、is_ip、price、review_score、release_year。预测时不可把 revenue 作为已知特征，因为 revenue 由售价和实际销量计算，属于目标泄漏。","销量预测,预测销量,目标变量,销售预测,sales forecast target",1

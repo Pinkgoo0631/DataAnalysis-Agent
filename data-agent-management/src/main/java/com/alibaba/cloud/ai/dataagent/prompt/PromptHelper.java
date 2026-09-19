@@ -16,13 +16,7 @@
 package com.alibaba.cloud.ai.dataagent.prompt;
 
 import com.alibaba.cloud.ai.dataagent.bo.schema.DisplayStyleBO;
-import com.alibaba.cloud.ai.dataagent.dto.prompt.EvidenceQueryRewriteDTO;
-import com.alibaba.cloud.ai.dataagent.dto.prompt.FeasibilityAssessmentOutputDTO;
-import com.alibaba.cloud.ai.dataagent.dto.prompt.IntentRecognitionOutputDTO;
-import com.alibaba.cloud.ai.dataagent.dto.prompt.QueryEnhanceOutputDTO;
-import com.alibaba.cloud.ai.dataagent.dto.prompt.SemanticConsistencyDTO;
-import com.alibaba.cloud.ai.dataagent.dto.prompt.SemanticConsistencyOutputDTO;
-import com.alibaba.cloud.ai.dataagent.dto.prompt.SqlGenerationDTO;
+import com.alibaba.cloud.ai.dataagent.dto.prompt.*;
 import com.alibaba.cloud.ai.dataagent.dto.schema.ColumnDTO;
 import com.alibaba.cloud.ai.dataagent.dto.schema.SchemaDTO;
 import com.alibaba.cloud.ai.dataagent.dto.schema.TableDTO;
@@ -268,6 +262,21 @@ public class PromptHelper {
 				QueryEnhanceOutputDTO.class);
 		params.put("format", beanOutputConverter.getFormat());
 		return PromptConstant.getQueryEnhancementPromptTemplate().render(params);
+	}
+
+	/**
+	 * 构建证据精排提示词
+	 * @param latestQuery 原始用户查询
+	 * @param candidates 编号后的候选证据文档文本
+	 * @return 证据精排提示词
+	 */
+	public static String buildRerankPrompt(String latestQuery, String candidates) {
+		Map<String, Object> params = new HashMap<>();
+		params.put("latest_query", StringUtils.defaultIfBlank(latestQuery, ""));
+		params.put("candidates", StringUtils.defaultIfBlank(candidates, "(无)"));
+		BeanOutputConverter<RerankOutputDTO> beanOutputConverter = new BeanOutputConverter<>(RerankOutputDTO.class);
+		params.put("format", beanOutputConverter.getFormat());
+		return PromptConstant.getRerankPromptTemplate().render(params);
 	}
 
 	public static String buildDataViewAnalysisPrompt() {

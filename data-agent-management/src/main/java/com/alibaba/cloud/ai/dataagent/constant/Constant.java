@@ -102,6 +102,8 @@ public final class Constant {
 
 	public static final String EVIDENCE_RECALL_NODE = "EVIDENCE_RECALL_NODE";
 
+	public static final String RERANK_NODE = "RERANK_NODE";
+
 	public static final String QUERY_ENHANCE_NODE = "QUERY_ENHANCE_NODE";
 
 	public static final String FEASIBILITY_ASSESSMENT_NODE = "FEASIBILITY_ASSESSMENT_NODE";
@@ -147,6 +149,15 @@ public final class Constant {
 	// nl2sql接口预留相关
 	public static final String IS_ONLY_NL2SQL = "IS_ONLY_NL2SQL";
 
+	// Rerank 精排开关：为 true 时 EvidenceRecallNode 之后进入 RerankNode 精排
+	public static final String IS_RERANK = "IS_RERANK";
+
+	// 证据召回候选文档（EvidenceRecallNode 写出，RerankNode 精排后回写）
+	public static final String EVIDENCE_DOCUMENTS = "EVIDENCE_DOCUMENTS";
+
+	// EvidenceRecallNode 使用的独立查询，供 RerankNode 保持召回与精排语义一致
+	public static final String EVIDENCE_QUERY = "EVIDENCE_QUERY";
+
 	// 人类复核相关
 	public static final String HUMAN_REVIEW_ENABLED = "HUMAN_REVIEW_ENABLED";
 
@@ -161,6 +172,4 @@ public final class Constant {
 	// Langfuse 追踪：threadId 透传到 graph state，用于 token 累计
 	public static final String TRACE_THREAD_ID = "TRACE_THREAD_ID";
 
-	//Result Evaluation结果评估
-	public static final String RESULT_EVALUATION = "RESULT_EVALUATION";
 }
