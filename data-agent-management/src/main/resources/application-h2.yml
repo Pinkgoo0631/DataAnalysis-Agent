@@ -29,8 +29,6 @@ spring:
       enabled: true
       path: /h2-console
   ai:
-    vectorstore:
-      type: simple
     alibaba:
       data-agent:
         checkpoint:

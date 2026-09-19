@@ -17,6 +17,7 @@ package com.alibaba.cloud.ai.dataagent.config;
 
 import com.alibaba.cloud.ai.dataagent.properties.FileStorageProperties;
 import com.alibaba.cloud.ai.dataagent.properties.OssStorageProperties;
+import com.alibaba.cloud.ai.dataagent.properties.DataAgentProperties;
 import com.alibaba.cloud.ai.dataagent.service.aimodelconfig.AiModelRegistry;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -26,6 +27,8 @@ import org.springframework.core.env.PropertySource;
 import org.springframework.core.env.StandardEnvironment;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.ai.vectorstore.milvus.autoconfigure.MilvusServiceClientProperties;
+import org.springframework.ai.vectorstore.chroma.autoconfigure.ChromaApiProperties;
+import org.springframework.ai.vectorstore.chroma.autoconfigure.ChromaVectorStoreProperties;
 
 import java.lang.reflect.Method;
 import java.util.List;
@@ -38,9 +41,39 @@ class VectorStoreConfigurationTest {
 
 	@Test
 	void vectorStoreProfiles_declareExpectedTypes() throws Exception {
-		assertThat(property("application.yml", "spring.ai.vectorstore.type")).isEqualTo("simple");
+		assertThat(property("application.yml", "spring.ai.vectorstore.type")).isEqualTo("chroma");
+		assertThat(property("application-simple.yml", "spring.ai.vectorstore.type")).isEqualTo("simple");
+		assertThat(property("application-h2.yml", "spring.ai.vectorstore.type")).isNull();
 		assertThat(property("application-milvus.yml", "spring.ai.vectorstore.type")).isEqualTo("milvus");
-		assertThat(property("application-elasticsearch.yml", "spring.ai.vectorstore.type")).isEqualTo("elasticsearch");
+	}
+
+	@Test
+	void defaultProfile_bindsChromaConnectionAndStoreProperties() throws Exception {
+		StandardEnvironment environment = environmentFor("application.yml");
+
+		ChromaApiProperties client = Binder.get(environment)
+			.bind("spring.ai.vectorstore.chroma.client", ChromaApiProperties.class)
+			.orElseThrow(() -> new IllegalStateException("Chroma client properties did not bind"));
+		ChromaVectorStoreProperties store = Binder.get(environment)
+			.bind("spring.ai.vectorstore.chroma", ChromaVectorStoreProperties.class)
+			.orElseThrow(() -> new IllegalStateException("Chroma vector-store properties did not bind"));
+
+		assertThat(client.getHost()).isEqualTo("http://localhost");
+		assertThat(client.getPort()).isEqualTo(8000);
+		assertThat(store.getTenantName()).isEqualTo("SpringAiTenant");
+		assertThat(store.getDatabaseName()).isEqualTo("SpringAiDatabase");
+		assertThat(store.getCollectionName()).isEqualTo("data_agent");
+		assertThat(store.isInitializeSchema()).isTrue();
+
+		DataAgentProperties dataAgent = Binder.get(environment)
+			.bind("spring.ai.alibaba.data-agent", DataAgentProperties.class)
+			.orElseThrow(() -> new IllegalStateException("DataAgent properties did not bind"));
+		assertThat(dataAgent.getVectorStore().isEnableHybridSearch()).isTrue();
+		assertThat(dataAgent.getVectorStore().getVectorCandidateTopK()).isEqualTo(30);
+		assertThat(dataAgent.getVectorStore().getKeywordCandidateTopK()).isEqualTo(30);
+		assertThat(dataAgent.getVectorStore().getDenseWeight()).isEqualTo(0.7);
+		assertThat(dataAgent.getVectorStore().getKeywordWeight()).isEqualTo(0.3);
+		assertThat(dataAgent.getVectorStore().getRerankTopN()).isEqualTo(8);
 	}
 
 	@Test
@@ -73,6 +106,15 @@ class VectorStoreConfigurationTest {
 			.filter(value -> value != null)
 			.findFirst()
 			.orElse(null);
+	}
+
+	private StandardEnvironment environmentFor(String resource) throws Exception {
+		StandardEnvironment environment = new StandardEnvironment();
+		List<PropertySource<?>> sources = loader.load(resource, new ClassPathResource(resource));
+		for (PropertySource<?> source : sources) {
+			environment.getPropertySources().addFirst(source);
+		}
+		return environment;
 	}
 
 	private void assertConditional(String methodName, Class<?>... parameterTypes) throws Exception {

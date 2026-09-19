@@ -126,4 +126,16 @@ class RrfFusionStrategyTest {
 		assertTrue(result.isEmpty());
 	}
 
+	@Test
+	void fuseResults_appliesConfiguredBranchWeights() {
+		RrfFusionStrategy weighted = new RrfFusionStrategy(60, 0.8, 0.2);
+		Document dense = new Document("dense", "semantic result", Collections.emptyMap());
+		Document keyword = new Document("keyword", "keyword result", Collections.emptyMap());
+
+		@SuppressWarnings("unchecked")
+		List<Document> result = weighted.fuseResults(2, List.of(dense), List.of(keyword));
+
+		assertEquals(List.of("dense", "keyword"), result.stream().map(Document::getId).toList());
+	}
+
 }

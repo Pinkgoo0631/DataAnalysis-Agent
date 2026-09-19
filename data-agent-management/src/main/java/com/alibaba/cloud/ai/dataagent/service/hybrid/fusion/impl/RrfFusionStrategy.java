@@ -28,6 +28,22 @@ import java.util.stream.Collectors;
 @Slf4j
 public class RrfFusionStrategy implements FusionStrategy {
 
+	private final int rrfK;
+
+	private final double[] weights;
+
+	public RrfFusionStrategy() {
+		this(60, 1.0, 1.0);
+	}
+
+	public RrfFusionStrategy(int rrfK, double... weights) {
+		if (rrfK <= 0) {
+			throw new IllegalArgumentException("RRF k must be greater than zero");
+		}
+		this.rrfK = rrfK;
+		this.weights = weights == null ? new double[0] : weights.clone();
+	}
+
 	@SuppressWarnings("unchecked")
 	@Override
 	public List<Document> fuseResults(int topK, List<Document>... resultLists) {
@@ -35,18 +51,17 @@ public class RrfFusionStrategy implements FusionStrategy {
 			return List.of();
 		}
 
-		// RRF参数配置
-		int k = 60;
-
 		// 使用Map存储每个文档的RRF分数
 		Map<String, Double> rrfScores = new HashMap<>();
 		// 使用Map存储文档ID到Document对象的映射
 		Map<String, Document> documentMap = new HashMap<>();
 
-		for (List<Document> resultList : resultLists) {
+		for (int listIndex = 0; listIndex < resultLists.length; listIndex++) {
+			List<Document> resultList = resultLists[listIndex];
 			if (resultList == null) {
 				continue;
 			}
+			double weight = listIndex < weights.length ? weights[listIndex] : 1.0;
 
 			for (int i = 0; i < resultList.size(); i++) {
 				Document doc = resultList.get(i);
@@ -56,7 +71,7 @@ public class RrfFusionStrategy implements FusionStrategy {
 				String docId = getDocumentId(doc);
 
 				// 计算并累加RRF分数: score = 1 / (k + rank)
-				rrfScores.merge(docId, 1.0 / (k + rank), Double::sum);
+				rrfScores.merge(docId, weight / (rrfK + rank), Double::sum);
 				// 如果是第一次遇到该文档,存入map
 				documentMap.putIfAbsent(docId, doc);
 			}

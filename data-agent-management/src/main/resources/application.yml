@@ -32,7 +32,18 @@ spring:
           jdbc:
             initialize-schema: always
     vectorstore:
-      type: simple
+      type: chroma
+      chroma:
+        client:
+          host: ${CHROMA_HOST:http://localhost}
+          port: ${CHROMA_PORT:8000}
+          key-token: ${CHROMA_KEY_TOKEN:}
+          username: ${CHROMA_USERNAME:}
+          password: ${CHROMA_PASSWORD:}
+        tenant-name: ${CHROMA_TENANT:SpringAiTenant}
+        database-name: ${CHROMA_DATABASE:SpringAiDatabase}
+        collection-name: ${CHROMA_COLLECTION:data_agent}
+        initialize-schema: ${CHROMA_INITIALIZE_SCHEMA:true}
     alibaba:
       data-agent:
         vector-store:
@@ -40,6 +51,17 @@ spring:
           table-similarity-threshold: 0.2
           default-topk-limit: 8
           default-similarity-threshold: 0.4
+          embedding-dimension: ${CHROMA_DIMENSION:0}
+          enable-hybrid-search: ${HYBRID_SEARCH_ENABLED:true}
+          hybrid-search-timeout-ms: ${HYBRID_SEARCH_TIMEOUT_MS:3000}
+          vector-candidate-top-k: ${HYBRID_VECTOR_CANDIDATE_TOP_K:30}
+          keyword-candidate-top-k: ${HYBRID_KEYWORD_CANDIDATE_TOP_K:30}
+          rrf-k: ${HYBRID_RRF_K:60}
+          dense-weight: ${HYBRID_DENSE_WEIGHT:0.7}
+          keyword-weight: ${HYBRID_KEYWORD_WEIGHT:0.3}
+          rerank-top-n: ${RERANK_TOP_N:8}
+          keyword-index-path: ${KEYWORD_INDEX_PATH:./vectorstore/lucene}
+          keyword-index-rebuild-on-start: ${KEYWORD_INDEX_REBUILD_ON_START:true}
         code-executor:
           python-max-tries-count: 5
           code-timeout: 60s

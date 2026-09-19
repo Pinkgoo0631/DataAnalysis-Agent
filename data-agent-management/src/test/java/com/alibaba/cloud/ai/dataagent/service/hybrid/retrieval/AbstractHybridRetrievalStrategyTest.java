@@ -86,9 +86,25 @@ class AbstractHybridRetrievalStrategyTest {
 		assertTrue(results.isEmpty());
 	}
 
+	@Test
+	@SuppressWarnings("unchecked")
+	void testRetrieve_vectorFailure_fallsBackToKeywordResults() {
+		Document keywordDoc = new Document("keyword result");
+		when(vectorStore.similaritySearch(any(SearchRequest.class))).thenThrow(new IllegalStateException("unavailable"));
+		when(fusionStrategy.fuseResults(anyInt(), any(), any())).thenAnswer(invocation -> invocation.getArgument(2));
+		strategy.setKeywordResults(List.of(keywordDoc));
+
+		HybridSearchRequest request = HybridSearchRequest.builder().query("test").topK(5).build();
+
+		List<Document> results = strategy.retrieve(request);
+		assertEquals(List.of(keywordDoc), results);
+	}
+
 	static class TestHybridRetrievalStrategy extends AbstractHybridRetrievalStrategy {
 
 		private List<Document> keywordResults = List.of();
+
+		private int keywordLimit;
 
 		TestHybridRetrievalStrategy(ExecutorService executorService, VectorStore vectorStore,
 				FusionStrategy fusionStrategy) {
@@ -100,7 +116,8 @@ class AbstractHybridRetrievalStrategyTest {
 		}
 
 		@Override
-		public List<Document> getDocumentsByKeywords(HybridSearchRequest request) {
+		public List<Document> getDocumentsByKeywords(HybridSearchRequest request, int limit) {
+			this.keywordLimit = limit;
 			return keywordResults;
 		}
 

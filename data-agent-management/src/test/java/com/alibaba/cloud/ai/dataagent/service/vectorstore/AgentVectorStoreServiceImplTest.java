@@ -17,6 +17,8 @@ package com.alibaba.cloud.ai.dataagent.service.vectorstore;
 
 import com.alibaba.cloud.ai.dataagent.dto.search.AgentSearchRequest;
 import com.alibaba.cloud.ai.dataagent.properties.DataAgentProperties;
+import com.alibaba.cloud.ai.dataagent.service.hybrid.keyword.KeywordIndexService;
+import com.alibaba.cloud.ai.dataagent.service.vector.MetadataDocumentRetriever;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -46,6 +48,12 @@ class AgentVectorStoreServiceImplTest {
 	@Mock
 	private DynamicFilterService dynamicFilterService;
 
+	@Mock
+	private MetadataDocumentRetriever metadataDocumentRetriever;
+
+	@Mock
+	private KeywordIndexService keywordIndexService;
+
 	private DataAgentProperties dataAgentProperties;
 
 	private AgentVectorStoreServiceImpl service;
@@ -61,7 +69,7 @@ class AgentVectorStoreServiceImplTest {
 		dataAgentProperties.setVectorStore(vsProps);
 
 		service = new AgentVectorStoreServiceImpl(vectorStore, Optional.empty(), dataAgentProperties,
-				dynamicFilterService);
+				dynamicFilterService, metadataDocumentRetriever, Optional.of(keywordIndexService));
 	}
 
 	@Test
@@ -132,6 +140,7 @@ class AgentVectorStoreServiceImplTest {
 
 		service.addDocuments("1", List.of(doc));
 		verify(vectorStore).add(anyList());
+		verify(keywordIndexService).upsert(anyList());
 	}
 
 	@Test
@@ -143,6 +152,7 @@ class AgentVectorStoreServiceImplTest {
 
 		service.addDocuments("1", List.of(doc));
 		verify(vectorStore).add(anyList());
+		verify(keywordIndexService).upsert(anyList());
 	}
 
 	@Test
@@ -168,6 +178,7 @@ class AgentVectorStoreServiceImplTest {
 		Boolean result = service.deleteDocumentsByMetadata(Map.of("agentId", "1"));
 		assertTrue(result);
 		verify(vectorStore).delete(anyString());
+		verify(keywordIndexService).deleteByFilter(any(Filter.Expression.class));
 	}
 
 	@Test
@@ -180,6 +191,7 @@ class AgentVectorStoreServiceImplTest {
 		assertEquals(Map.of("knowledgeId", 7), metadata);
 		verify(vectorStore)
 			.delete(argThat((String filter) -> filter.contains("knowledgeId") && filter.contains("agentId")));
+		verify(keywordIndexService).deleteByFilter(any(Filter.Expression.class));
 	}
 
 	@Test

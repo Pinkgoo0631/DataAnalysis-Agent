@@ -21,6 +21,7 @@ import com.alibaba.cloud.ai.dataagent.properties.DataAgentProperties;
 import com.alibaba.cloud.ai.dataagent.dto.search.AgentSearchRequest;
 import com.alibaba.cloud.ai.dataagent.dto.search.HybridSearchRequest;
 import com.alibaba.cloud.ai.dataagent.service.hybrid.retrieval.HybridRetrievalStrategy;
+import com.alibaba.cloud.ai.dataagent.service.hybrid.keyword.KeywordIndexService;
 import com.alibaba.cloud.ai.dataagent.service.vector.MetadataDocumentRetriever;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
@@ -52,22 +53,33 @@ public class AgentVectorStoreServiceImpl implements AgentVectorStoreService {
 
 	private final MetadataDocumentRetriever metadataDocumentRetriever;
 
+	private final Optional<KeywordIndexService> keywordIndexService;
+
 	@Autowired
 	public AgentVectorStoreServiceImpl(VectorStore vectorStore,
 			Optional<HybridRetrievalStrategy> hybridRetrievalStrategy, DataAgentProperties dataAgentProperties,
-			DynamicFilterService dynamicFilterService, MetadataDocumentRetriever metadataDocumentRetriever) {
+			DynamicFilterService dynamicFilterService, MetadataDocumentRetriever metadataDocumentRetriever,
+			Optional<KeywordIndexService> keywordIndexService) {
 		this.vectorStore = vectorStore;
 		this.hybridRetrievalStrategy = hybridRetrievalStrategy;
 		this.dataAgentProperties = dataAgentProperties;
 		this.dynamicFilterService = dynamicFilterService;
 		this.metadataDocumentRetriever = metadataDocumentRetriever;
+		this.keywordIndexService = keywordIndexService;
 		log.info("VectorStore type: {}", vectorStore.getClass().getSimpleName());
+	}
+
+	public AgentVectorStoreServiceImpl(VectorStore vectorStore,
+			Optional<HybridRetrievalStrategy> hybridRetrievalStrategy, DataAgentProperties dataAgentProperties,
+			DynamicFilterService dynamicFilterService, MetadataDocumentRetriever metadataDocumentRetriever) {
+		this(vectorStore, hybridRetrievalStrategy, dataAgentProperties, dynamicFilterService, metadataDocumentRetriever,
+				Optional.empty());
 	}
 
 	AgentVectorStoreServiceImpl(VectorStore vectorStore, Optional<HybridRetrievalStrategy> hybridRetrievalStrategy,
 			DataAgentProperties dataAgentProperties, DynamicFilterService dynamicFilterService) {
 		this(vectorStore, hybridRetrievalStrategy, dataAgentProperties, dynamicFilterService,
-				new MetadataDocumentRetriever(new StandardEnvironment()));
+				new MetadataDocumentRetriever(new StandardEnvironment()), Optional.empty());
 	}
 
 	@Override
@@ -119,7 +131,7 @@ public class AgentVectorStoreServiceImpl implements AgentVectorStoreService {
 		Assert.notNull(agentId, "AgentId cannot be null.");
 		Assert.notEmpty(documents, "Documents cannot be empty.");
 		validateDocumentMetadata(agentId, documents);
-		vectorStore.add(documents);
+		addToIndexes(documents);
 	}
 
 	private void validateDocumentMetadata(String ownerId, List<Document> documents) {
@@ -152,6 +164,7 @@ public class AgentVectorStoreServiceImpl implements AgentVectorStoreService {
 	public Boolean deleteDocumentsByMetadata(Map<String, Object> metadata) {
 		Assert.notNull(metadata, "Metadata cannot be null.");
 		String filterExpression = buildFilterExpressionString(metadata);
+		Filter.Expression parsedFilter = new FilterExpressionTextParser().parse(filterExpression);
 
 		if (vectorStore instanceof MetadataAwareSimpleVectorStore simpleVectorStore) {
 			int deleted = simpleVectorStore.deleteByMetadata(metadata);
@@ -175,6 +188,7 @@ public class AgentVectorStoreServiceImpl implements AgentVectorStoreService {
 				}
 			}
 		}
+		keywordIndexService.ifPresent(index -> index.deleteByFilter(parsedFilter));
 
 		return true;
 	}
@@ -187,6 +201,7 @@ public class AgentVectorStoreServiceImpl implements AgentVectorStoreService {
 		Map<String, Object> scopedMetadata = new HashMap<>(metadata);
 		scopedMetadata.put(Constant.AGENT_ID, agentId);
 		String filterExpression = buildFilterExpressionString(scopedMetadata);
+		Filter.Expression parsedFilter = new FilterExpressionTextParser().parse(filterExpression);
 
 		if (vectorStore instanceof MetadataAwareSimpleVectorStore simpleVectorStore) {
 			int deleted = simpleVectorStore.deleteByMetadata(scopedMetadata);
@@ -210,6 +225,7 @@ public class AgentVectorStoreServiceImpl implements AgentVectorStoreService {
 				}
 			}
 		}
+		keywordIndexService.ifPresent(index -> index.deleteByFilter(parsedFilter));
 
 		return true;
 	}
@@ -240,7 +256,7 @@ public class AgentVectorStoreServiceImpl implements AgentVectorStoreService {
 
 			// 删除这批新文档
 			if (!idsToDelete.isEmpty()) {
-				vectorStore.delete(idsToDelete);
+				deleteFromIndexes(idsToDelete);
 				totalDeleted += idsToDelete.size();
 			}
 
@@ -341,19 +357,19 @@ public class AgentVectorStoreServiceImpl implements AgentVectorStoreService {
 		List<String> newDocumentIds = replacementDocuments.stream().map(Document::getId).toList();
 		Set<String> newDocumentIdSet = new HashSet<>(newDocumentIds);
 		try {
-			vectorStore.add(replacementDocuments);
+			addToIndexes(replacementDocuments);
 			List<String> oldDocumentIds = oldDocuments.stream()
 				.map(Document::getId)
 				.filter(id -> !newDocumentIdSet.contains(id))
 				.toList();
 			if (!oldDocumentIds.isEmpty()) {
-				vectorStore.delete(oldDocumentIds);
+				deleteFromIndexes(oldDocumentIds);
 			}
 		}
 		catch (Exception replacementFailure) {
 			try {
 				if (!newDocumentIds.isEmpty()) {
-					vectorStore.delete(newDocumentIds);
+					deleteFromIndexes(newDocumentIds);
 				}
 			}
 			catch (Exception rollbackFailure) {
@@ -361,6 +377,27 @@ public class AgentVectorStoreServiceImpl implements AgentVectorStoreService {
 			}
 			throw replacementFailure;
 		}
+	}
+
+	private void addToIndexes(List<Document> documents) {
+		vectorStore.add(documents);
+		try {
+			keywordIndexService.ifPresent(index -> index.upsert(documents));
+		}
+		catch (RuntimeException keywordFailure) {
+			try {
+				vectorStore.delete(documents.stream().map(Document::getId).toList());
+			}
+			catch (RuntimeException rollbackFailure) {
+				keywordFailure.addSuppressed(rollbackFailure);
+			}
+			throw keywordFailure;
+		}
+	}
+
+	private void deleteFromIndexes(List<String> documentIds) {
+		vectorStore.delete(documentIds);
+		keywordIndexService.ifPresent(index -> index.deleteByIds(documentIds));
 	}
 
 	private void validateReplacementMetadata(Map<String, Object> identityMetadata, List<Document> documents) {

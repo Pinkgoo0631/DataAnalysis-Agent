@@ -184,14 +184,20 @@ Configuration prefix: `spring.ai.alibaba.data-agent.vector-store`
 | `default-topk-limit` | Global default max documents returned (currently only used by business knowledge and agent knowledge) | 8 |
 | `table-topk-limit` | Maximum documents for table recall | 10 |
 | `embedding-dimension` | Expected embedding dimension for the persistent vector store; must match the embedding model's output dimension. A value of `0` disables the check (the in-memory store defaults to 0) | 0 |
-| `enable-hybrid-search` | Enable hybrid search (vector retrieval + ES keyword retrieval); only effective with Elasticsearch | false |
+| `enable-hybrid-search` | Enable Chroma dense retrieval plus Lucene BM25 keyword retrieval | true |
 | `hybrid-search-timeout-ms` | Maximum wait time (ms) for each retrieval branch in hybrid search | 3000 |
-| `elasticsearch-min-score` | ES keyword search minimum score threshold, used to filter out low-relevance documents | 0.5 |
+| `vector-candidate-top-k` / `keyword-candidate-top-k` | Candidate counts before RRF fusion | 30 / 30 |
+| `rrf-k` / `dense-weight` / `keyword-weight` | RRF smoothing parameter and branch weights | 60 / 0.7 / 0.3 |
+| `rerank-top-n` | Documents retained after LLM reranking | 8 |
+| `keyword-index-path` | Persistent Lucene keyword-index directory | `./vectorstore/lucene` |
+| `keyword-index-rebuild-on-start` | Rebuild Lucene from Chroma during startup | true |
 | `file-path` | Local serialization file path for `SimpleVectorStore` (in-memory store only) | `./vectorstore/vectorstore.json` |
 
 #### Vector Store Dependency Extension
 
-The project uses in-memory vector store (`SimpleVectorStore`) by default. To use persistent vector stores (like PGVector, Milvus, etc.), follow these steps:
+The project uses Chroma by default, and `spring-ai-starter-vector-store-chroma` is already included
+in `data-agent-management/pom.xml`. To switch to another vector store such as PGVector or Milvus,
+follow these steps:
 
 1. **Add Dependency**: Add the corresponding Spring AI Starter to `pom.xml`.
 
@@ -205,13 +211,47 @@ The project uses in-memory vector store (`SimpleVectorStore`) by default. To use
 
 2. **Configure Properties**: Add the corresponding vector store connection configuration in `application.yml`. For specific parameters, refer to [Spring AI Official Documentation](https://springdoc.cn/spring-ai/api/vectordbs.html).
 
-3. **Configure `spring.ai.vectorstore.type`**. You can find the specific value after importing the vector store starter above by searching for the `VectorStoreAutoConfiguration` auto-configuration class. For example, for `es` it's `ElasticsearchVectorStoreAutoConfiguration`, and you can see that `spring.ai.vectorstore.type` expects `elasticsearch`.
+3. **Configure `spring.ai.vectorstore.type`**. The current default is `chroma`.
 
 4. **Configure `embedding-dimension`**: When using a persistent vector store, set `spring.ai.alibaba.data-agent.vector-store.embedding-dimension` to match your embedding model's output dimension (e.g. `1024`). This validates the dimension at startup and avoids retrieval failures after documents are written.
 
 #### Ready-to-Use Configuration Examples
 
-The project ships two ready-to-activate vector store example profiles under `data-agent-management/src/main/resources/`. Activate the corresponding profile via `spring.profiles.active` or the `SPRING_PROFILES_ACTIVE` environment variable — no manual connection configuration required.
+The default configuration in `application.yml` connects to Chroma at `http://localhost:8000`.
+The project also provides `simple` and `milvus` profiles, selectable with
+`spring.profiles.active` or `SPRING_PROFILES_ACTIVE`.
+
+**Chroma (default)**
+
+```yaml
+spring:
+  ai:
+    vectorstore:
+      type: chroma
+      chroma:
+        client:
+          host: ${CHROMA_HOST:http://localhost}
+          port: ${CHROMA_PORT:8000}
+        tenant-name: ${CHROMA_TENANT:SpringAiTenant}
+        database-name: ${CHROMA_DATABASE:SpringAiDatabase}
+        collection-name: ${CHROMA_COLLECTION:data_agent}
+        initialize-schema: ${CHROMA_INITIALIZE_SCHEMA:true}
+```
+
+Start Chroma locally with:
+
+```bash
+docker compose -f docker-file/docker-compose.yml up -d chroma
+```
+
+To temporarily use the in-memory store, set `SPRING_PROFILES_ACTIVE=simple`. Combine profiles as
+`SPRING_PROFILES_ACTIVE=h2,simple` when using H2 as well. The H2 profile now selects only the
+business database and no longer changes the vector store implicitly.
+
+> Migration note: Chroma does not import the existing `./vectorstore/vectorstore.json`. After the
+> switch, initialize data-source schemas again, refresh business-knowledge vectors, and retrigger
+> embeddings for agent knowledge. Archive the old SimpleVectorStore file only after verifying the
+> Chroma data.
 
 **Milvus (`application-milvus.yml`)**
 
@@ -243,114 +283,12 @@ export MILVUS_HOST=127.0.0.1
 export MILVUS_PORT=19530
 ```
 
-**Elasticsearch (`application-elasticsearch.yml`)**
+**Chroma + Lucene hybrid retrieval**
 
-```yaml
-spring:
-  elasticsearch:
-    uris: ${ELASTICSEARCH_URIS:http://127.0.0.1:9200}
-    username: ${ELASTICSEARCH_USERNAME:}
-    password: ${ELASTICSEARCH_PASSWORD:}
-  ai:
-    vectorstore:
-      type: elasticsearch
-      elasticsearch:
-        index-name: ${ELASTICSEARCH_INDEX_NAME:spring-ai-document-index}
-        dimensions: ${ELASTICSEARCH_DIMENSIONS:1024}
-        initialize-schema: ${ELASTICSEARCH_INITIALIZE_SCHEMA:true}
-    alibaba:
-      data-agent:
-        vector-store:
-          embedding-dimension: ${ELASTICSEARCH_DIMENSIONS:1024}
-```
-
-The `spring-ai-starter-vector-store-elasticsearch` dependency is already bundled in `data-agent-management/pom.xml`, so no extra dependency is needed — just activate the profile:
-
-```bash
-export SPRING_PROFILES_ACTIVE=elasticsearch
-# Optional: override the default connection info
-export ELASTICSEARCH_URIS=http://127.0.0.1:9200
-```
-
-> Tip: Elasticsearch supports hybrid search. After activating the ES profile, set `spring.ai.alibaba.data-agent.vector-store.enable-hybrid-search` to `true` to enable the weighted fusion of vector retrieval and keyword retrieval.
-
-#### ES Schema Configuration Example
-Below is the Elasticsearch Schema structure. Other vector stores (like Milvus, PGVector) can reference this structure to create their Schema, paying special attention to the data types of fields in `metadata`.
-
-```json
-{
-  "mappings": {
-    "properties": {
-      "content": {
-        "type": "text",
-        "fields": {
-          "keyword": {
-            "type": "keyword",
-            "ignore_above": 256
-          }
-        }
-      },
-      "embedding": {
-        "type": "dense_vector",
-        "dims": 1024,
-        "index": true,
-        "similarity": "cosine",
-        "index_options": {
-          "type": "int8_hnsw",
-          "m": 16,
-          "ef_construction": 100
-        }
-      },
-      "id": {
-        "type": "text",
-        "fields": {
-          "keyword": {
-            "type": "keyword",
-            "ignore_above": 256
-          }
-        }
-      },
-      "metadata": {
-        "properties": {
-          "agentId": {
-            "type": "text",
-            "fields": {
-              "keyword": {
-                "type": "keyword",
-                "ignore_above": 256
-              }
-            }
-          },
-          "agentKnowledgeId": {
-            "type": "long"
-          },
-          "businessTermId": {
-            "type": "long"
-          },
-          "concreteAgentKnowledgeType": {
-            "type": "text",
-            "fields": {
-              "keyword": {
-                "type": "keyword",
-                "ignore_above": 256
-              }
-            }
-          },
-          "vectorType": {
-            "type": "text",
-            "fields": {
-              "keyword": {
-                "type": "keyword",
-                "ignore_above": 256
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-```
+Chroma performs dense semantic retrieval and the embedded Lucene index performs Chinese BM25
+keyword retrieval. Weighted RRF fuses both rankings before `RerankNode` performs final reranking.
+Writes, replacements, and deletions update both indexes. By default, startup rebuilds Lucene from
+Chroma in pages to repair index drift; Docker deployment persists Lucene in its own volume.
 
 ### 4. Text Splitter Configuration
 

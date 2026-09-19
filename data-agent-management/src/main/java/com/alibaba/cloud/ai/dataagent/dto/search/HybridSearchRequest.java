@@ -58,9 +58,13 @@ public class HybridSearchRequest implements Serializable {
 	private Map<String, Object> extraParams = new HashMap<>();
 
 	public org.springframework.ai.vectorstore.SearchRequest toVectorSearchRequest() {
+		return toVectorSearchRequest(this.topK);
+	}
+
+	public org.springframework.ai.vectorstore.SearchRequest toVectorSearchRequest(int candidateTopK) {
 		return org.springframework.ai.vectorstore.SearchRequest.builder()
 			.query(this.query)
-			.topK(this.topK)
+			.topK(candidateTopK)
 			.similarityThreshold(this.similarityThreshold)
 			.filterExpression(this.filterExpression)
 			.build();

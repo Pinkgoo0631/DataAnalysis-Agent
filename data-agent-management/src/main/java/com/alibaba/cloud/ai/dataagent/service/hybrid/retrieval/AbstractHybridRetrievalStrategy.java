@@ -38,6 +38,10 @@ public abstract class AbstractHybridRetrievalStrategy implements HybridRetrieval
 
 	private final long timeoutMs;
 
+	private final int vectorCandidateTopK;
+
+	private final int keywordCandidateTopK;
+
 	protected AbstractHybridRetrievalStrategy(ExecutorService executorService, VectorStore vectorStore,
 			FusionStrategy fusionStrategy) {
 		this(executorService, vectorStore, fusionStrategy, 3000L);
@@ -45,22 +49,31 @@ public abstract class AbstractHybridRetrievalStrategy implements HybridRetrieval
 
 	protected AbstractHybridRetrievalStrategy(ExecutorService executorService, VectorStore vectorStore,
 			FusionStrategy fusionStrategy, long timeoutMs) {
+		this(executorService, vectorStore, fusionStrategy, timeoutMs, 30, 30);
+	}
+
+	protected AbstractHybridRetrievalStrategy(ExecutorService executorService, VectorStore vectorStore,
+			FusionStrategy fusionStrategy, long timeoutMs, int vectorCandidateTopK, int keywordCandidateTopK) {
 		this.executorService = executorService;
 		this.vectorStore = vectorStore;
 		this.fusionStrategy = fusionStrategy;
 		this.timeoutMs = timeoutMs;
+		this.vectorCandidateTopK = vectorCandidateTopK;
+		this.keywordCandidateTopK = keywordCandidateTopK;
 		log.info(
 				"Initialized AbstractHybridRetrievalStrategy with executorService: {}, vectorStore: {}, fusionStrategy: {}",
 				executorService, vectorStore, fusionStrategy);
 	}
 
-	// 模板方法，先进行向量搜索后进行关键词搜索，最后结果融合。
-	// 如果你的向量库天然支持混合检索，如Milvus,Es..你可以在子类直接重写该方法不用它这里的流程走
-	// 目前ES实现仍然按照模板流程走，因为ES的付费企业版才能使用它服务端的rrf融合策略
+	// 模板方法：并行执行向量搜索和关键词搜索，再融合两路结果。
+	// 任一路超时或失败时降级使用另一路，避免局部故障导致整次召回失败。
 	@Override
 	public List<Document> retrieve(HybridSearchRequest request) {
 
-		SearchRequest vectorSearchRequest = request.toVectorSearchRequest();
+		int requestedTopK = request.getTopK() == null ? 1 : Math.max(1, request.getTopK());
+		int vectorLimit = Math.max(requestedTopK, vectorCandidateTopK);
+		int keywordLimit = Math.max(requestedTopK, keywordCandidateTopK);
+		SearchRequest vectorSearchRequest = request.toVectorSearchRequest(vectorLimit);
 
 		// 异步执行向量搜索
 		CompletableFuture<List<Document>> vectorSearchFuture = CompletableFuture.supplyAsync(() -> {
@@ -68,11 +81,16 @@ public abstract class AbstractHybridRetrievalStrategy implements HybridRetrieval
 			log.debug("Vector Search completed. Found {} documents for SearchRequest: {}", vectorResults.size(),
 					vectorSearchRequest);
 			return vectorResults;
-		}, executorService).orTimeout(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS);
+		}, executorService)
+			.completeOnTimeout(List.of(), timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+			.exceptionally(error -> {
+				log.warn("Vector search failed; falling back to keyword results: {}", error.getMessage());
+				return List.of();
+			});
 
 		// 异步执行关键词搜索
 		CompletableFuture<List<Document>> keywordSearchFuture = CompletableFuture.supplyAsync(() -> {
-			List<Document> results = getDocumentsByKeywords(request);
+			List<Document> results = getDocumentsByKeywords(request, keywordLimit);
 			log.debug("Keyword Search completed. Found {} documents, with query: {}", results.size(),
 					request.getQuery());
 			return results;
@@ -90,7 +108,7 @@ public abstract class AbstractHybridRetrievalStrategy implements HybridRetrieval
 			List<Document> keywordResults = keywordSearchFuture.get();
 
 			// 融合结果
-			List<Document> finalDocuments = fusionStrategy.fuseResults(request.getTopK(), vectorResults,
+			List<Document> finalDocuments = fusionStrategy.fuseResults(requestedTopK, vectorResults,
 					keywordResults);
 			log.debug("Fusion completed. Found {} documents", finalDocuments.size());
 			return finalDocuments;
@@ -105,6 +123,6 @@ public abstract class AbstractHybridRetrievalStrategy implements HybridRetrieval
 
 	}
 
-	public abstract List<Document> getDocumentsByKeywords(HybridSearchRequest request);
+	public abstract List<Document> getDocumentsByKeywords(HybridSearchRequest request, int limit);
 
 }

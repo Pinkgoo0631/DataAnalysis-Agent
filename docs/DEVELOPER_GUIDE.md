@@ -184,14 +184,19 @@ public class AgentVectorStoreService {
 | `default-topk-limit` | 全局默认查询返回的最大文档数量（目前只有业务知识和智能体知识在使用） | 8 |
 | `table-topk-limit` | 召回表的最大文档数量 | 10 |
 | `embedding-dimension` | 持久化向量库期望的向量维度校验值，需与嵌入模型输出维度一致；设为 `0` 时关闭校验（内存向量库默认即为 0） | 0 |
-| `enable-hybrid-search` | 是否启用混合搜索（向量检索 + ES 关键词检索），仅在使用 Elasticsearch 时生效 | false |
+| `enable-hybrid-search` | 是否启用 Chroma 向量检索 + Lucene BM25 关键词检索 | true |
 | `hybrid-search-timeout-ms` | 混合检索中每个检索分支的最大等待时间（毫秒） | 3000 |
-| `elasticsearch-min-score` | ES 关键词搜索的最小分数阈值，用于过滤相关性较低的文档 | 0.5 |
+| `vector-candidate-top-k` / `keyword-candidate-top-k` | RRF 融合前两路召回的候选数量 | 30 / 30 |
+| `rrf-k` / `dense-weight` / `keyword-weight` | RRF 平滑参数及向量、关键词权重 | 60 / 0.7 / 0.3 |
+| `rerank-top-n` | LLM 精排后保留的文档数量 | 8 |
+| `keyword-index-path` | Lucene 关键词索引持久化目录 | `./vectorstore/lucene` |
+| `keyword-index-rebuild-on-start` | 启动时是否从 Chroma 重建 Lucene 索引 | true |
 | `file-path` | `SimpleVectorStore` 本地序列化文件地址（仅内存向量库使用） | `./vectorstore/vectorstore.json` |
 
 #### 向量库依赖扩展
 
-项目默认使用内存向量库 (`SimpleVectorStore`)。若需使用持久化向量库（如 PGVector, Milvus 等），请按照以下步骤操作：
+项目默认使用 Chroma，`spring-ai-starter-vector-store-chroma` 已包含在
+`data-agent-management/pom.xml` 中。若需切换到其他向量库（如 PGVector、Milvus），请按照以下步骤操作：
 
 1. **引入依赖**: 在 `pom.xml` 中添加相应的 Spring AI Starter。
    
@@ -205,13 +210,45 @@ public class AgentVectorStoreService {
    
 2. **配置属性**: 在 `application.yml` 中添加对应向量库的连接配置。具体参数请参考 [Spring AI 官方文档](https://springdoc.cn/spring-ai/api/vectordbs.html)。
 
-3. **配置 `spring.ai.vectorstore.type`**。具体填写的值可以在引入上面的向量库 starter 后自行搜索 `VectorStoreAutoConfiguration` 自动配置类，比如 `es` 的是 `ElasticsearchVectorStoreAutoConfiguration`，该类里面可以看见 `spring.ai.vectorstore.type` 期望的是 `elasticsearch`。
+3. **配置 `spring.ai.vectorstore.type`**。当前默认值为 `chroma`。
 
 4. **配置 `embedding-dimension`**: 使用持久化向量库时，建议将 `spring.ai.alibaba.data-agent.vector-store.embedding-dimension` 设置为与嵌入模型输出维度一致的值（如 `1024`），以便启动时校验维度是否匹配，避免写入后检索异常。
 
 #### 开箱即用的配置示例
 
-项目已内置两个可直接激活的向量库示例 Profile，位于 `data-agent-management/src/main/resources/`。通过 `spring.profiles.active` 或环境变量 `SPRING_PROFILES_ACTIVE` 激活对应 Profile 即可，无需手动编写连接配置。
+默认配置位于 `application.yml`，连接本机 `http://localhost:8000` 的 Chroma。项目另外提供
+`simple` 和 `milvus` Profile；通过 `spring.profiles.active` 或
+`SPRING_PROFILES_ACTIVE` 即可切换。
+
+**Chroma（默认）**
+
+```yaml
+spring:
+  ai:
+    vectorstore:
+      type: chroma
+      chroma:
+        client:
+          host: ${CHROMA_HOST:http://localhost}
+          port: ${CHROMA_PORT:8000}
+        tenant-name: ${CHROMA_TENANT:SpringAiTenant}
+        database-name: ${CHROMA_DATABASE:SpringAiDatabase}
+        collection-name: ${CHROMA_COLLECTION:data_agent}
+        initialize-schema: ${CHROMA_INITIALIZE_SCHEMA:true}
+```
+
+本地启动 Chroma：
+
+```bash
+docker compose -f docker-file/docker-compose.yml up -d chroma
+```
+
+如需临时回退到内存向量库，设置 `SPRING_PROFILES_ACTIVE=simple`；若同时使用 H2，设置
+`SPRING_PROFILES_ACTIVE=h2,simple`。H2 Profile 只选择业务数据库，不再隐式改变向量库。
+
+> 迁移提示：Chroma 不会读取原有的 `./vectorstore/vectorstore.json`。切换后需重新执行数据源
+> Schema 初始化、刷新业务知识向量，并对智能体知识重新触发向量化。确认 Chroma 数据完整后，
+> 再归档旧的 SimpleVectorStore 文件。
 
 **Milvus (`application-milvus.yml`)**
 
@@ -243,114 +280,11 @@ export MILVUS_HOST=127.0.0.1
 export MILVUS_PORT=19530
 ```
 
-**Elasticsearch (`application-elasticsearch.yml`)**
+**Chroma + Lucene 混合检索**
 
-```yaml
-spring:
-  elasticsearch:
-    uris: ${ELASTICSEARCH_URIS:http://127.0.0.1:9200}
-    username: ${ELASTICSEARCH_USERNAME:}
-    password: ${ELASTICSEARCH_PASSWORD:}
-  ai:
-    vectorstore:
-      type: elasticsearch
-      elasticsearch:
-        index-name: ${ELASTICSEARCH_INDEX_NAME:spring-ai-document-index}
-        dimensions: ${ELASTICSEARCH_DIMENSIONS:1024}
-        initialize-schema: ${ELASTICSEARCH_INITIALIZE_SCHEMA:true}
-    alibaba:
-      data-agent:
-        vector-store:
-          embedding-dimension: ${ELASTICSEARCH_DIMENSIONS:1024}
-```
-
-`spring-ai-starter-vector-store-elasticsearch` 依赖已包含在 `data-agent-management/pom.xml` 中，无需额外引入，激活 Profile 即可：
-
-```bash
-export SPRING_PROFILES_ACTIVE=elasticsearch
-# 可选：覆盖默认连接信息
-export ELASTICSEARCH_URIS=http://127.0.0.1:9200
-```
-
-> 提示：Elasticsearch 支持混合检索。激活 ES Profile 后，再将 `spring.ai.alibaba.data-agent.vector-store.enable-hybrid-search` 设为 `true` 即可启用向量检索与关键词检索的混合融合策略。
-
-#### ES Schema 配置示例
-以下为 Elasticsearch 的 Schema 结构。其他向量库（如 Milvus, PGVector）可参考此结构建立 Schema，尤其要注意 `metadata` 中的字段数据类型。
-
-```json
-{
-  "mappings": {
-    "properties": {
-      "content": {
-        "type": "text",
-        "fields": {
-          "keyword": {
-            "type": "keyword",
-            "ignore_above": 256
-          }
-        }
-      },
-      "embedding": {
-        "type": "dense_vector",
-        "dims": 1024,
-        "index": true,
-        "similarity": "cosine",
-        "index_options": {
-          "type": "int8_hnsw",
-          "m": 16,
-          "ef_construction": 100
-        }
-      },
-      "id": {
-        "type": "text",
-        "fields": {
-          "keyword": {
-            "type": "keyword",
-            "ignore_above": 256
-          }
-        }
-      },
-      "metadata": {
-        "properties": {
-          "agentId": {
-            "type": "text",
-            "fields": {
-              "keyword": {
-                "type": "keyword",
-                "ignore_above": 256
-              }
-            }
-          },
-          "agentKnowledgeId": {
-            "type": "long"
-          },
-          "businessTermId": {
-            "type": "long"
-          },
-          "concreteAgentKnowledgeType": {
-            "type": "text",
-            "fields": {
-              "keyword": {
-                "type": "keyword",
-                "ignore_above": 256
-              }
-            }
-          },
-          "vectorType": {
-            "type": "text",
-            "fields": {
-              "keyword": {
-                "type": "keyword",
-                "ignore_above": 256
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-```
+Chroma 负责语义向量召回，应用内 Lucene 负责中文 BM25 关键词召回，两路结果通过加权
+RRF 融合，再交给 `RerankNode` 精排。写入、替换和删除会同步更新两个索引；默认在启动时
+从 Chroma 分页重建 Lucene，以修复索引漂移。容器部署已为 Lucene 配置独立持久化卷。
 
 ### 4. 文本切分配置 (Text Splitter)
 

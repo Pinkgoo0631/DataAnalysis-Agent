@@ -295,9 +295,27 @@ public class DataAgentProperties {
 		private long hybridSearchTimeoutMs = 3000;
 
 		/**
-		 * Elasticsearch最小分数阈值，用于es执行关键词搜索时过滤相关性较低的文档
+		 * Candidate counts before RRF fusion. They should be larger than the final topK.
 		 */
-		private double elasticsearchMinScore = 0.5;
+		private int vectorCandidateTopK = 30;
+
+		private int keywordCandidateTopK = 30;
+
+		/** RRF smoothing and branch weights. */
+		private int rrfK = 60;
+
+		private double denseWeight = 0.7;
+
+		private double keywordWeight = 0.3;
+
+		/** Maximum number of documents retained after LLM reranking. */
+		private int rerankTopN = 8;
+
+		/** Persistent Lucene index used for BM25 keyword retrieval. */
+		private String keywordIndexPath = "./vectorstore/lucene";
+
+		/** Rebuild Lucene from Chroma at startup to repair cross-index drift. */
+		private boolean keywordIndexRebuildOnStart = true;
 
 		/**
 		 * SimpleVectorStore本地序列化文件地址
