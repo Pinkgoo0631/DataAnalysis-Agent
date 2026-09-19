@@ -10,8 +10,8 @@ This document will guide you through the installation, configuration, and first 
 - **MySQL**: 5.7 or higher
 - **Node.js**: 22 or higher
 - **pnpm**: 11 or higher
-- **Docker**: Required when a workflow executes Python steps; optional for SQL-only analysis
-- **Vector Database**: (Optional) Uses in-memory vector store by default
+- **Docker**: Required to run the default Chroma store locally and when workflows execute Python steps
+- **Vector Database**: Chroma by default (local port `8000`)
 
 ## 1. Business Database Preparation
 
@@ -37,21 +37,25 @@ mysql -u root -p your_database < data-agent-management/src/main/resources/sql/pr
 
 ### 2.1 Configure Management Database
 
-Configure your MySQL database connection in `data-agent-management/src/main/resources/application.yml`.
+Create the Git-ignored local configuration file at the repository root, then fill in the database connection:
 
 > Initialization behavior: the default is `spring.sql.init.mode: never`, so DataAgent does not
 > create tables or insert sample data automatically. Run the SQL files above before the first
 > start, or set `DATA_AGENT_DATASOURCE_SQL_INIT=always` only when sample initialization is
 > explicitly required.
 
-```yaml
-spring:
-  datasource:
-    url: jdbc:mysql://127.0.0.1:3306/saa_data_agent?useUnicode=true&characterEncoding=utf-8&zeroDateTimeBehavior=convertToNull&transformedBitIsBoolean=true&allowMultiQueries=true&allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=Asia/Shanghai
-    username: ${DATA_AGENT_DATASOURCE_USERNAME:root}
-    password: ${DATA_AGENT_DATASOURCE_PASSWORD:root}
-    driver-class-name: com.mysql.cj.jdbc.Driver
+```bash
+cp .env.example .env
 ```
+
+```dotenv
+DATA_AGENT_DATASOURCE_URL=jdbc:mysql://127.0.0.1:3306/saa_data_agent?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai
+DATA_AGENT_DATASOURCE_USERNAME=replace-me
+DATA_AGENT_DATASOURCE_PASSWORD=replace-me
+DATA_AGENT_DATASOURCE_SQL_INIT=never
+```
+
+`application.yml` automatically imports the root `.env`; Git ignores this file.
 
 ### 2.2 Data Initialization Configuration
 
@@ -84,7 +88,16 @@ Start the project, click on Model Configuration, add a new model and fill in you
 
 ### 2.5 Vector Store Configuration
 
-The system uses an in-memory vector store by default, and also provides hybrid search support for Elasticsearch.
+The system uses Chroma as its default persistent vector store and an embedded Lucene BM25 index for
+hybrid retrieval. Start Chroma locally first:
+
+```bash
+docker compose -f docker-file/docker-compose.yml up -d chroma
+```
+
+Override the connection, tenant, database, and collection with `CHROMA_HOST`, `CHROMA_PORT`,
+`CHROMA_TENANT`, `CHROMA_DATABASE`, and `CHROMA_COLLECTION`. For a temporary in-memory store,
+set `SPRING_PROFILES_ACTIVE=simple`.
 
 #### 2.5.1 Vector Store Dependency Import
 
@@ -99,84 +112,11 @@ You can import your preferred persistent vector store. You just need to provide 
 
 For detailed vector store documentation, refer to: https://springdoc.cn/spring-ai/api/vectordbs.html
 
-#### 2.5.2 Vector Store Schema Setup
+#### 2.5.2 Hybrid Retrieval Indexes
 
-Below is the ES schema structure. For other vector stores like Milvus, PG, etc., you can create your own schema based on this ES structure. Pay special attention to the data type of each field in metadata.
-
-```json
-{
-  "mappings": {
-    "properties": {
-      "content": {
-        "type": "text",
-        "fields": {
-          "keyword": {
-            "type": "keyword",
-            "ignore_above": 256
-          }
-        }
-      },
-      "embedding": {
-        "type": "dense_vector",
-        "dims": 1024,
-        "index": true,
-        "similarity": "cosine",
-        "index_options": {
-          "type": "int8_hnsw",
-          "m": 16,
-          "ef_construction": 100
-        }
-      },
-      "id": {
-        "type": "text",
-        "fields": {
-          "keyword": {
-            "type": "keyword",
-            "ignore_above": 256
-          }
-        }
-      },
-      "metadata": {
-        "properties": {
-          "agentId": {
-            "type": "text",
-            "fields": {
-              "keyword": {
-                "type": "keyword",
-                "ignore_above": 256
-              }
-            }
-          },
-          "agentKnowledgeId": {
-            "type": "long"
-          },
-          "businessTermId": {
-            "type": "long"
-          },
-          "concreteAgentKnowledgeType": {
-            "type": "text",
-            "fields": {
-              "keyword": {
-                "type": "keyword",
-                "ignore_above": 256
-              }
-            }
-          },
-          "vectorType": {
-            "type": "text",
-            "fields": {
-              "keyword": {
-                "type": "keyword",
-                "ignore_above": 256
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-```
+Chroma stores documents, metadata, and dense vectors. Lucene persists its BM25 index at
+`KEYWORD_INDEX_PATH`. Writes update both indexes, and startup rebuilds Lucene from Chroma by default.
+Docker Compose already defines the persistent `lucene-index` volume.
 
 #### 2.5.3 Vector Store Configuration Parameters
 
@@ -188,9 +128,9 @@ Below is the ES schema structure. For other vector stores like Milvus, PG, etc.,
 
 ### 2.7 Replace Vector Store Implementation
 
-> To replace the default in-memory vector store (for example, with PGVector or Milvus), see [Developer Guide - Vector Store Dependency Extension](DEVELOPER_GUIDE-en.md#vector-store-dependency-extension).
+> To replace the default Chroma store (for example, with Simple, PGVector, or Milvus), see [Developer Guide - Vector Store Dependency Extension](DEVELOPER_GUIDE-en.md#vector-store-dependency-extension).
 >
-> The project ships two ready-to-use example profiles, `application-milvus.yml` and `application-elasticsearch.yml`. Switch quickly with `SPRING_PROFILES_ACTIVE=milvus` (or `elasticsearch`); see [Developer Guide - Ready-to-Use Configuration Examples](DEVELOPER_GUIDE-en.md#ready-to-use-configuration-examples).
+> The project ships `application-simple.yml` and `application-milvus.yml`. Select the matching profile to switch; see [Developer Guide - Ready-to-Use Configuration Examples](DEVELOPER_GUIDE-en.md#ready-to-use-configuration-examples).
 
 ### 2.8 Configure the Python Sandbox
 
@@ -224,6 +164,7 @@ for the full configuration, dependency contract, and troubleshooting guidance.
 Run the following command from the project root:
 
 ```bash
+docker compose -f docker-file/docker-compose.yml up -d chroma
 ./mvnw -pl data-agent-management spring-boot:run
 ```
 

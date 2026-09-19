@@ -13,6 +13,21 @@
 #limitations under the License.
 
 services:
+  # 默认向量数据库
+  chroma:
+    image: ghcr.io/chroma-core/chroma:1.0.0
+    container_name: data-agent-chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - PERSIST_DIRECTORY=/data
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma-data:/data
+    networks:
+      - app-network
+    restart: unless-stopped
+
   # 后端服务
   backend:
     build:
@@ -21,22 +36,25 @@ services:
       tags:
         - saa-data-agent-backend:1.0.0-SNAPSHOT
     container_name: data-agent-backend
+    env_file:
+      - ../.env
     environment:
-      # 复用宿主机既有 mysql0631 容器内的 data_agent 库（已有数据，不再自动初始化）
-      - DATA_AGENT_DATASOURCE_URL=jdbc:mysql://mysql0631:3306/data_agent?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-      - DATA_AGENT_DATASOURCE_USERNAME=root
-      - DATA_AGENT_DATASOURCE_PASSWORD=123456
-      - DATA_AGENT_DATASOURCE_SQL_INIT=never
-      - AI_DASHSCOPE_API_KEY=${AI_DASHSCOPE_API_KEY}
+      # 容器内通过服务名访问 Chroma；其余配置统一从仓库根目录 .env 注入。
+      - CHROMA_HOST=${CHROMA_DOCKER_HOST:-http://chroma}
+      - KEYWORD_INDEX_PATH=/app/vectorstore/lucene
     ports:
       - "8065:8065"
     depends_on:
+      chroma:
+        condition: service_started
       mysql-data:
         condition: service_healthy
       postgres-data:
         condition: service_healthy
     networks:
       - app-network
+    volumes:
+      - lucene-index:/app/vectorstore/lucene
     restart: unless-stopped
 
   # Vue前端服务
@@ -62,8 +80,8 @@ services:
     image: mysql:8.0
     container_name: data-agent-mysql-datasource
     restart: always
-    environment:
-      MYSQL_ROOT_PASSWORD: root
+    env_file:
+      - ../.env
     networks:
       - app-network
     volumes:
@@ -80,9 +98,8 @@ services:
     image: postgres:15
     container_name: data-agent-postgres-datasource
     restart: always
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+    env_file:
+      - ../.env
     networks:
       - app-network
     volumes:
@@ -97,3 +114,7 @@ networks:
   app-network:
     driver: bridge
     name: "data-agent-network"
+
+volumes:
+  chroma-data:
+  lucene-index:

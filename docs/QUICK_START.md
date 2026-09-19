@@ -10,8 +10,8 @@
 - **MySQL**: 5.7 或更高版本
 - **Node.js**: 22 或更高版本
 - **pnpm**: 11 或更高版本
-- **Docker**: 工作流需要执行 Python 步骤时必需；仅使用 SQL 分析时可不启动
-- **向量数据库**: (可选) 默认使用内存向量库
+- **Docker**: 本地启动默认 Chroma 向量库时需要；执行 Python 步骤时也需要
+- **向量数据库**: 默认使用 Chroma（本地端口 `8000`）
 
 ## 🗄️ 1. 业务数据库准备
 
@@ -37,20 +37,24 @@ mysql -u root -p your_database < data-agent-management/src/main/resources/sql/pr
 
 ### 2.1 配置management数据库
 
-在`data-agent-management/src/main/resources/application.yml`中配置你的MySQL数据库连接信息。
+先在项目根目录生成不会被 Git 提交的本地配置文件，然后填写数据库连接信息：
 
 > 初始化行为说明：默认配置为 `spring.sql.init.mode: never`，不会自动创建表或插入示例数据。
 > 首次启动前请先执行上面的 SQL 文件，或在明确需要示例数据时通过环境变量
 > `DATA_AGENT_DATASOURCE_SQL_INIT=always` 开启初始化。
 
-```yaml
-spring:
-  datasource:
-    url: jdbc:mysql://127.0.0.1:3306/saa_data_agent?useUnicode=true&characterEncoding=utf-8&zeroDateTimeBehavior=convertToNull&transformedBitIsBoolean=true&allowMultiQueries=true&allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=Asia/Shanghai
-    username: ${DATA_AGENT_DATASOURCE_USERNAME:root}
-    password: ${DATA_AGENT_DATASOURCE_PASSWORD:root}
-    driver-class-name: com.mysql.cj.jdbc.Driver
+```bash
+cp .env.example .env
 ```
+
+```dotenv
+DATA_AGENT_DATASOURCE_URL=jdbc:mysql://127.0.0.1:3306/saa_data_agent?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai
+DATA_AGENT_DATASOURCE_USERNAME=请填写
+DATA_AGENT_DATASOURCE_PASSWORD=请填写
+DATA_AGENT_DATASOURCE_SQL_INIT=never
+```
+
+`application.yml` 会自动读取根目录 `.env`；该文件已被 `.gitignore` 忽略。
 
 ### 2.2 数据初始化配置
 
@@ -83,7 +87,15 @@ spring:
 
 ### 2.5 向量库配置
 
-系统默认使用内存向量库，同时系统提供了对es的混合检索支持。
+系统默认使用 Chroma 持久化向量库，并通过应用内 Lucene BM25 提供混合检索。先启动本地 Chroma：
+
+```bash
+docker compose -f docker-file/docker-compose.yml up -d chroma
+```
+
+连接地址、租户、数据库和集合可通过 `CHROMA_HOST`、`CHROMA_PORT`、`CHROMA_TENANT`、
+`CHROMA_DATABASE`、`CHROMA_COLLECTION` 覆盖。若仅需临时内存存储，可设置
+`SPRING_PROFILES_ACTIVE=simple`。
 
 #### 2.5.1 向量库依赖引入
 
@@ -98,84 +110,11 @@ spring:
 
 详细对应的向量库参考文档：https://springdoc.cn/spring-ai/api/vectordbs.html
 
-#### 2.5.2 向量库schema设置
+#### 2.5.2 混合检索索引
 
-以下为es的schema结构，其他向量库如milvus，pg等自行可根据如下的es的结构建立自己的schema。尤其要注意metadata中的每个字段的数据类型。
-
-```json
-{
-  "mappings": {
-    "properties": {
-      "content": {
-        "type": "text",
-        "fields": {
-          "keyword": {
-            "type": "keyword",
-            "ignore_above": 256
-          }
-        }
-      },
-      "embedding": {
-        "type": "dense_vector",
-        "dims": 1024,
-        "index": true,
-        "similarity": "cosine",
-        "index_options": {
-          "type": "int8_hnsw",
-          "m": 16,
-          "ef_construction": 100
-        }
-      },
-      "id": {
-        "type": "text",
-        "fields": {
-          "keyword": {
-            "type": "keyword",
-            "ignore_above": 256
-          }
-        }
-      },
-      "metadata": {
-        "properties": {
-          "agentId": {
-            "type": "text",
-            "fields": {
-              "keyword": {
-                "type": "keyword",
-                "ignore_above": 256
-              }
-            }
-          },
-          "agentKnowledgeId": {
-            "type": "long"
-          },
-          "businessTermId": {
-            "type": "long"
-          },
-          "concreteAgentKnowledgeType": {
-            "type": "text",
-            "fields": {
-              "keyword": {
-                "type": "keyword",
-                "ignore_above": 256
-              }
-            }
-          },
-          "vectorType": {
-            "type": "text",
-            "fields": {
-              "keyword": {
-                "type": "keyword",
-                "ignore_above": 256
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-```
+Chroma 保存文档、metadata 和稠密向量；Lucene 索引保存在 `KEYWORD_INDEX_PATH` 指定的目录。
+系统会同步写入两个索引，并默认在启动时从 Chroma 重建 Lucene。Docker Compose 已配置
+`lucene-index` 持久化卷。
 
 #### 2.5.3 向量库配置参数
 
@@ -187,9 +126,9 @@ spring:
 
 ### 2.7 替换vector-store的实现类
 
-> 关于如何替换默认的内存向量库（如使用 PGVector、Milvus 等），请参考 [开发者指南 - 向量库依赖扩展](DEVELOPER_GUIDE.md#向量库依赖扩展)。
+> 关于如何替换默认的 Chroma（如使用 Simple、PGVector、Milvus），请参考 [开发者指南 - 向量库依赖扩展](DEVELOPER_GUIDE.md#向量库依赖扩展)。
 >
-> 项目已内置 `application-milvus.yml` 与 `application-elasticsearch.yml` 两个开箱即用的示例 Profile，通过 `SPRING_PROFILES_ACTIVE=milvus`（或 `elasticsearch`）即可快速切换，详见 [开发者指南 - 开箱即用的配置示例](DEVELOPER_GUIDE.md#开箱即用的配置示例)。
+> 项目已内置 `application-simple.yml` 与 `application-milvus.yml`，通过对应 Profile 即可快速切换，详见 [开发者指南 - 开箱即用的配置示例](DEVELOPER_GUIDE.md#开箱即用的配置示例)。
 
 ### 2.8 配置 Python 沙盒
 
@@ -220,6 +159,7 @@ export DATAAGENT_PYPI_INDEX_URL=https://pypi.org/simple
 在项目根目录运行：
 
 ```bash
+docker compose -f docker-file/docker-compose.yml up -d chroma
 ./mvnw -pl data-agent-management spring-boot:run
 ```
 

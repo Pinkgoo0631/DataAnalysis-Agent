@@ -9,13 +9,19 @@ springdoc:
 
 # 存储 DataAgent 业务数据的数据库，并非Agent分析数据的来源
 spring:
+  config:
+    # 从仓库根目录或模块父目录加载本地配置；文件不存在时仍允许通过系统环境变量启动。
+    import:
+      - "optional:file:.env[.properties]"
+      - "optional:file:../.env[.properties]"
   codec:
     # Python workflow timelines can contain generated code, result data and the final report.
     max-in-memory-size: 10MB
   datasource:
-    url: ${DATA_AGENT_DATASOURCE_URL:jdbc:mysql://106.53.56.163:13306/data_agent?useUnicode=true&characterEncoding=utf-8&zeroDateTimeBehavior=convertToNull&transformedBitIsBoolean=true&allowMultiQueries=true&allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=Asia/Shanghai}
-    username: ${DATA_AGENT_DATASOURCE_USERNAME:root}
-    password: ${DATA_AGENT_DATASOURCE_PASSWORD:123456}
+    # 必填项不提供默认值，避免缺少配置时误连数据库或使用弱密码。
+    url: ${DATA_AGENT_DATASOURCE_URL}
+    username: ${DATA_AGENT_DATASOURCE_USERNAME}
+    password: ${DATA_AGENT_DATASOURCE_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
   sql:
     init:

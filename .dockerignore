@@ -1,0 +1,14 @@
+# Never send local credentials to the Docker daemon or bake them into image layers.
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Development and generated files
+.git
+.idea
+**/.idea
+**/node_modules
+**/target
+uploads
+vectorstore

@@ -77,20 +77,29 @@ class VectorStoreConfigurationTest {
 	}
 
 	@Test
+	void defaultProfile_importsDotEnvAndDoesNotProvideDatasourceCredentialDefaults() throws Exception {
+		assertThat(property("application.yml", "spring.config.import[0]"))
+			.isEqualTo("optional:file:.env[.properties]");
+		assertThat(property("application.yml", "spring.config.import[1]"))
+			.isEqualTo("optional:file:../.env[.properties]");
+		assertThat(property("application.yml", "spring.datasource.url"))
+			.isEqualTo("${DATA_AGENT_DATASOURCE_URL}");
+		assertThat(property("application.yml", "spring.datasource.username"))
+			.isEqualTo("${DATA_AGENT_DATASOURCE_USERNAME}");
+		assertThat(property("application.yml", "spring.datasource.password"))
+			.isEqualTo("${DATA_AGENT_DATASOURCE_PASSWORD}");
+	}
+
+	@Test
 	void milvusProfile_bindsConnectionPropertiesUsedBySpringAi() throws Exception {
-		StandardEnvironment environment = new StandardEnvironment();
-		List<PropertySource<?>> sources = loader.load("application-milvus.yml",
-				new ClassPathResource("application-milvus.yml"));
-		for (PropertySource<?> source : sources) {
-			environment.getPropertySources().addFirst(source);
-		}
+		StandardEnvironment environment = environmentFor("application-milvus.yml");
 
 		MilvusServiceClientProperties properties = Binder.get(environment)
 			.bind("spring.ai.vectorstore.milvus.client", MilvusServiceClientProperties.class)
 			.orElseThrow(() -> new IllegalStateException("Milvus client properties did not bind"));
 
-		assertThat(properties.getHost()).isEqualTo("127.0.0.1");
-		assertThat(properties.getPort()).isEqualTo(19530);
+		assertThat(properties.getHost()).isEqualTo("localhost");
+		assertThat(properties.getPort()).isEqualTo(5423);
 	}
 
 	@Test

@@ -76,10 +76,14 @@
 # 1. 导入数据库
 mysql -u root -p < data-agent-management/src/main/resources/sql/schema.sql
 
-# 2. 启动后端
+# 2. 生成本地配置并填写数据库密码等信息
+cp .env.example .env
+
+# 3. 启动后端
+docker compose -f docker-file/docker-compose.yml up -d chroma
 ./mvnw -pl data-agent-management spring-boot:run
 
-# 3. 在另一个终端启动前端
+# 4. 在另一个终端启动前端
 cd data-agent-frontend-nuxt
 pnpm install && pnpm dev
 ```

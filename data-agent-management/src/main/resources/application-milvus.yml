@@ -4,8 +4,8 @@ spring:
       type: milvus
       milvus:
         client:
-          host: ${MILVUS_HOST:106.53.56.163}
-          port: ${MILVUS_PORT:19530}
+          host: ${MILVUS_HOST:localhost}
+          port: ${MILVUS_PORT:5423}
         database-name: ${MILVUS_DATABASE:default}
         collection-name: ${MILVUS_COLLECTION:vector_store}
         embedding-dimension: ${MILVUS_DIMENSION:1024}

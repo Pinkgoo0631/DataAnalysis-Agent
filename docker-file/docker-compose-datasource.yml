@@ -20,8 +20,8 @@ services:
     restart: always
     ports:
       - "13306:3306"
-    environment:
-      MYSQL_ROOT_PASSWORD: root
+    env_file:
+      - ../.env
     volumes:
       - ./config/mysql:/docker-entrypoint-initdb.d
     command: --default-authentication-plugin=mysql_native_password
@@ -38,9 +38,8 @@ services:
     restart: always
     ports:
       - "15432:5432"
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+    env_file:
+      - ../.env
     volumes:
       - ./config/postgres:/docker-entrypoint-initdb.d
     healthcheck:

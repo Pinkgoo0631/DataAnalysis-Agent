@@ -8,8 +8,8 @@ spring:
     max-in-memory-size: 10MB
   datasource:
     url: jdbc:h2:mem:nl2sql_database;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=true;MODE=MySQL;DB_CLOSE_ON_EXIT=FALSE
-    username: root
-    password: root
+    username: ${H2_DATASOURCE_USERNAME}
+    password: ${H2_DATASOURCE_PASSWORD}
     driver-class-name: org.h2.Driver
   sql:
     init:

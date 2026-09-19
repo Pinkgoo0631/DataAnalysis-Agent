@@ -76,10 +76,14 @@ Additionally, this project natively supports **MCP (Model Context Protocol)**, e
 # 1. Import database
 mysql -u root -p < data-agent-management/src/main/resources/sql/schema.sql
 
-# 2. Start backend
+# 2. Create the local configuration file and fill in credentials
+cp .env.example .env
+
+# 3. Start backend
+docker compose -f docker-file/docker-compose.yml up -d chroma
 ./mvnw -pl data-agent-management spring-boot:run
 
-# 3. Start the frontend in another terminal
+# 4. Start the frontend in another terminal
 cd data-agent-frontend-nuxt
 pnpm install && pnpm dev
 ```
