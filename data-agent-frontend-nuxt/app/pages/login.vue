@@ -15,11 +15,9 @@
 -->
 
 <template>
-	<v-card width="440" max-width="100%" class="pa-4 pa-sm-7 rounded-xl" elevation="18">
+	<v-card width="440" max-width="100%" class="auth-card pa-4 pa-sm-7" border>
 		<div class="d-flex align-center mb-6">
-			<v-avatar color="primary" size="48" class="mr-4 rounded-lg">
-				<v-icon icon="mdi-robot" color="white" size="28" />
-			</v-avatar>
+			<BrandMark :size="44" class="mr-4 auth-card__mark" />
 			<div>
 				<div class="text-h6 font-weight-bold">登录 Data Agent</div>
 				<div class="text-body-2 text-medium-emphasis">进入你的独立工作空间</div>
@@ -66,7 +64,9 @@
 
 		<div class="text-center text-body-2 mt-6">
 			还没有账号？
-			<NuxtLink to="/register" class="text-primary font-weight-bold">立即注册</NuxtLink>
+			<NuxtLink to="/register" class="text-primary font-weight-bold"
+				>立即注册</NuxtLink
+			>
 		</div>
 	</v-card>
 </template>
@@ -88,7 +88,11 @@ const form = reactive({ username: '', password: '' });
 
 function resolveError(error: unknown) {
 	if (axios.isAxiosError(error)) {
-		return error.response?.data?.message || error.response?.data?.detail || '用户名或密码错误';
+		return (
+			error.response?.data?.message ||
+			error.response?.data?.detail ||
+			'用户名或密码错误'
+		);
 	}
 	return '登录失败，请稍后重试';
 }
@@ -98,7 +102,10 @@ async function submit() {
 	errorMessage.value = '';
 	try {
 		await authStore.login(form);
-		const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/agent/new';
+		const redirect =
+			typeof route.query.redirect === 'string'
+				? route.query.redirect
+				: '/agent/new';
 		await navigateTo(redirect);
 	} catch (error) {
 		errorMessage.value = resolveError(error);
@@ -107,3 +114,17 @@ async function submit() {
 	}
 }
 </script>
+
+<style scoped>
+.auth-card {
+	width: 100% !important;
+	max-width: 440px !important;
+	background: #fff;
+	border-color: var(--da-line) !important;
+	box-shadow: 8px 8px 0 rgba(71, 123, 145, 0.12) !important;
+}
+
+.auth-card__mark {
+	box-shadow: 0 0 0 1px rgba(29, 34, 38, 0.1);
+}
+</style>

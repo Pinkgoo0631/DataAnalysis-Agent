@@ -1,18 +1,11 @@
-/*
- * Copyright 2026 the original author or authors.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+/* * Copyright 2026 the original author or authors. * * Licensed under the
+Apache License, Version 2.0 (the "License"); * you may not use this file except
+in compliance with the License. * You may obtain a copy of the License at * *
+https://www.apache.org/licenses/LICENSE-2.0 * * Unless required by applicable
+law or agreed to in writing, software * distributed under the License is
+distributed on an "AS IS" BASIS, * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+either express or implied. * See the License for the specific language governing
+permissions and * limitations under the License. */
 
 <template>
 	<div class="base-drawer" :style="cssVars">
@@ -79,19 +72,19 @@ const cssVars = computed(() => ({
 	width: 100%;
 	height: 100vh;
 	overflow: hidden;
-	background-color: #f8fafc;
+	background-color: var(--da-canvas);
 }
 
 .base-drawer__left {
 	width: var(--drawer-width);
 	height: 100%;
-	background-color: #1e293b;
-	color: #e2e8f0;
-	transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+	background-color: var(--da-graphite-900);
+	color: #edf1f2;
+	transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 	overflow: hidden;
 	display: flex;
 	flex-direction: column;
-	border-right: 1px solid rgba(255, 255, 255, 0.05);
+	border-right: 1px solid var(--da-graphite-950);
 	flex-shrink: 0;
 	white-space: nowrap;
 }
@@ -109,19 +102,21 @@ const cssVars = computed(() => ({
 }
 
 .base-drawer__header {
-	height: 56px;
-	border-bottom: 1px solid #e2e8f0;
-	background-color: #ffffff;
+	height: 64px;
+	border-bottom: 1px solid var(--da-line);
+	background-color: rgba(248, 250, 250, 0.96);
 	display: flex;
 	align-items: center;
-	padding: 0 16px;
+	padding: 0 20px;
 	flex-shrink: 0;
+	box-shadow: 0 1px 0 rgba(255, 255, 255, 0.72) inset;
 }
 
 .base-drawer__content {
 	flex: 1;
 	overflow: auto;
 	position: relative;
+	background: var(--da-canvas);
 }
 
 @media (max-width: 768px) {
@@ -129,7 +124,7 @@ const cssVars = computed(() => ({
 		position: absolute;
 		inset: 0 auto 0 0;
 		z-index: 100;
-		box-shadow: 8px 0 24px rgba(15, 23, 42, 0.2);
+		box-shadow: 8px 0 24px rgba(29, 34, 38, 0.22);
 	}
 
 	.base-drawer__left--closed {

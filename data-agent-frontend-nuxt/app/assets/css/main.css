@@ -14,38 +14,96 @@
  * limitations under the License.
  */
 
-/* 页面淡入淡出且轻微位移 */
+:root {
+	--da-graphite-950: #1d2226;
+	--da-graphite-900: #252b30;
+	--da-graphite-800: #31383e;
+	--da-steel-600: #477b91;
+	--da-steel-100: #dbe6ea;
+	--da-signal-600: #d65e2d;
+	--da-signal-500: #e76f3c;
+	--da-signal-100: #fbe7de;
+	--da-canvas: #eef1f3;
+	--da-surface: #f8fafa;
+	--da-surface-raised: #ffffff;
+	--da-line: #cbd2d6;
+	--da-line-strong: #aeb8bd;
+	--da-text: #252b30;
+	--da-text-muted: #667178;
+	--da-success: #268768;
+	--da-warning: #c9851b;
+	--da-danger: #c84a42;
+	--da-radius-xs: 2px;
+	--da-radius-sm: 4px;
+	--da-radius-md: 6px;
+	--da-shadow-panel: 0 1px 2px rgba(29, 34, 38, 0.08);
+	--da-font-sans:
+		MiSans, 'HarmonyOS Sans SC', 'Segoe UI Variable', 'Microsoft YaHei UI',
+		sans-serif;
+	--da-font-mono:
+		'JetBrains Mono', 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+}
+
+html {
+	color-scheme: light;
+	background: var(--da-canvas);
+}
+
+body {
+	margin: 0;
+	font-family: var(--da-font-sans);
+	color: var(--da-text);
+	background: var(--da-canvas);
+	font-feature-settings:
+		'tnum' 1,
+		'ss01' 1;
+	-webkit-font-smoothing: antialiased;
+}
+
+::selection {
+	color: var(--da-graphite-950);
+	background: rgba(231, 111, 60, 0.24);
+}
+
+*:focus-visible {
+	outline: 2px solid var(--da-signal-500);
+	outline-offset: 2px;
+}
+
 .page-enter-active,
 .page-leave-active {
-	transition: all 0.3s ease;
+	transition:
+		opacity 0.16s ease,
+		transform 0.16s ease;
 }
 
 .page-enter-from {
 	opacity: 0;
-	transform: translateY(10px); /* 从下方一点点浮现 */
+	transform: translateY(4px);
 }
 
 .page-leave-to {
 	opacity: 0;
-	transform: translateY(-10px); /* 向上方一点点消失 */
+	transform: translateY(-2px);
 }
 
 /* ── 公共页面样式 ──────────────────────────────────────────────────────────── */
 
 .page-shell {
-	padding: 32px;
+	padding: 24px;
+	background: var(--da-canvas);
+	min-height: 100%;
 }
 
 .search-field .v-field__outline {
-	--v-field-border-color: #e2e8f0;
+	--v-field-border-color: var(--da-line-strong);
 }
 
 .custom-label {
 	font-size: 0.75rem;
 	font-weight: 600;
-	color: #64748b;
-	text-transform: uppercase;
-	letter-spacing: 0.05em;
+	color: var(--da-text-muted);
+	letter-spacing: 0.02em;
 	margin-bottom: 6px;
 	display: block;
 }
@@ -58,6 +116,58 @@
 	margin-right: 6px;
 	display: inline-block;
 	animation: breathe 2s infinite ease-in-out;
+}
+
+.instrument-panel {
+	background: var(--da-surface-raised);
+	border: 1px solid var(--da-line);
+	border-radius: var(--da-radius-sm);
+	box-shadow: var(--da-shadow-panel);
+}
+
+.instrument-code {
+	font-family: var(--da-font-mono);
+	font-variant-numeric: tabular-nums;
+	letter-spacing: 0.02em;
+}
+
+.v-card {
+	border-color: var(--da-line) !important;
+}
+
+.v-field {
+	font-size: 14px;
+}
+
+.v-field--variant-outlined .v-field__outline {
+	--v-field-border-opacity: 0.7;
+}
+
+.v-btn {
+	letter-spacing: 0.01em;
+	text-transform: none;
+}
+
+* {
+	scrollbar-color: #aeb8bd transparent;
+	scrollbar-width: thin;
+}
+
+@media (max-width: 768px) {
+	.page-shell {
+		padding: 16px;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		scroll-behavior: auto !important;
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+	}
 }
 
 .breathing-dot-green {

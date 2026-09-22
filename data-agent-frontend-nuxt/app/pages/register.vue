@@ -15,14 +15,14 @@
 -->
 
 <template>
-	<v-card width="440" max-width="100%" class="pa-4 pa-sm-7 rounded-xl" elevation="18">
+	<v-card width="440" max-width="100%" class="auth-card pa-4 pa-sm-7" border>
 		<div class="d-flex align-center mb-6">
-			<v-avatar color="primary" size="48" class="mr-4 rounded-lg">
-				<v-icon icon="mdi-account-plus" color="white" size="26" />
-			</v-avatar>
+			<BrandMark :size="44" class="mr-4 auth-card__mark" />
 			<div>
 				<div class="text-h6 font-weight-bold">创建账户</div>
-				<div class="text-body-2 text-medium-emphasis">新账户从空白隔离环境开始</div>
+				<div class="text-body-2 text-medium-emphasis">
+					新账户从空白隔离环境开始
+				</div>
 			</div>
 		</div>
 
@@ -80,7 +80,9 @@
 
 		<div class="text-center text-body-2 mt-6">
 			已有账号？
-			<NuxtLink to="/login" class="text-primary font-weight-bold">返回登录</NuxtLink>
+			<NuxtLink to="/login" class="text-primary font-weight-bold"
+				>返回登录</NuxtLink
+			>
 		</div>
 	</v-card>
 </template>
@@ -106,7 +108,11 @@ const canSubmit = computed(
 
 function resolveError(error: unknown) {
 	if (axios.isAxiosError(error)) {
-		return error.response?.data?.message || error.response?.data?.detail || '注册失败，请检查输入';
+		return (
+			error.response?.data?.message ||
+			error.response?.data?.detail ||
+			'注册失败，请检查输入'
+		);
 	}
 	return '注册失败，请稍后重试';
 }
@@ -128,3 +134,17 @@ async function submit() {
 	}
 }
 </script>
+
+<style scoped>
+.auth-card {
+	width: 100% !important;
+	max-width: 440px !important;
+	background: #fff;
+	border-color: var(--da-line) !important;
+	box-shadow: 8px 8px 0 rgba(71, 123, 145, 0.12) !important;
+}
+
+.auth-card__mark {
+	box-shadow: 0 0 0 1px rgba(29, 34, 38, 0.1);
+}
+</style>

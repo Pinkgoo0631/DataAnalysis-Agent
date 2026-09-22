@@ -42,8 +42,37 @@ export default defineNuxtConfig({
 	},
 	vuetify: {
 		vuetifyOptions: {
+			theme: {
+				defaultTheme: 'precisionLight',
+				themes: {
+					precisionLight: {
+						dark: false,
+						colors: {
+							background: '#EEF1F3',
+							surface: '#F8FAFA',
+							primary: '#E76F3C',
+							secondary: '#477B91',
+							info: '#477B91',
+							success: '#268768',
+							warning: '#C9851B',
+							error: '#C84A42',
+						},
+						variables: {
+							'border-color': '37, 43, 48',
+							'border-opacity': 0.16,
+							'high-emphasis-opacity': 0.9,
+							'medium-emphasis-opacity': 0.68,
+						},
+					},
+				},
+			},
 			defaults: {
-				VBtn: { variant: 'outlined' },
+				VBtn: { variant: 'outlined', rounded: 'sm' },
+				VCard: { rounded: 'sm', elevation: 0 },
+				VTextField: { color: 'secondary', rounded: 'sm' },
+				VSelect: { color: 'secondary', rounded: 'sm' },
+				VTextarea: { color: 'secondary', rounded: 'sm' },
+				VDialog: { scrollable: true },
 			},
 		},
 	},
@@ -71,6 +100,13 @@ export default defineNuxtConfig({
 	},
 	//全局动画配置
 	app: {
+		head: {
+			title: 'DataAgent · 智能分析工作台',
+			link: [
+				{ rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
+				{ rel: 'alternate icon', href: '/favicon.ico' },
+			],
+		},
 		pageTransition: { name: 'page', mode: 'out-in' },
 	},
 	css: ['@/assets/css/main.css'],
