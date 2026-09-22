@@ -20,14 +20,25 @@ import com.alibaba.cloud.ai.dataagent.dto.knowledge.businessknowledge.UpdateBusi
 import com.alibaba.cloud.ai.dataagent.service.business.BusinessKnowledgeService;
 import com.alibaba.cloud.ai.dataagent.service.auth.ResourceOwnershipService;
 import com.alibaba.cloud.ai.dataagent.vo.ApiResponse;
+import com.alibaba.cloud.ai.dataagent.vo.BatchImportResult;
 import com.alibaba.cloud.ai.dataagent.vo.BusinessKnowledgeVO;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.buffer.DataBufferUtils;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.util.StringUtils;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.security.core.Authentication;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 @Slf4j
@@ -72,6 +83,43 @@ public class BusinessKnowledgeController {
 		ownershipService.requireAgent(knowledge.getAgentId(), authentication);
 		return ApiResponse.success("success create businessKnowledge",
 				businessKnowledgeService.addKnowledge(knowledge));
+	}
+
+	@PostMapping(value = "/import/csv", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+	public Mono<ApiResponse<BatchImportResult>> importCsv(@RequestPart("file") FilePart file,
+			@RequestPart("agentId") String agentId, Authentication authentication) {
+		Long parsedAgentId = Long.valueOf(agentId);
+		ownershipService.requireAgent(parsedAgentId, authentication);
+		String filename = file.filename();
+
+		return DataBufferUtils.join(file.content()).flatMap(dataBuffer -> {
+			byte[] bytes = new byte[dataBuffer.readableByteCount()];
+			dataBuffer.read(bytes);
+			DataBufferUtils.release(dataBuffer);
+
+			return Mono.fromCallable(() -> {
+				BatchImportResult result = businessKnowledgeService
+					.importFromCsv(new ByteArrayInputStream(bytes), filename, parsedAgentId);
+				return ApiResponse.success("CSV导入完成", result);
+			}).subscribeOn(Schedulers.boundedElastic());
+		}).onErrorResume(IllegalArgumentException.class, e -> {
+			log.warn("CSV import rejected: {}", e.getMessage());
+			return Mono.just(ApiResponse.error("CSV导入失败：" + e.getMessage()));
+		}).onErrorResume(Exception.class, e -> {
+			log.error("CSV import failed", e);
+			return Mono.just(ApiResponse.error("CSV导入失败，请检查文件后重试"));
+		});
+	}
+
+	@GetMapping("/template/csv")
+	public ResponseEntity<byte[]> downloadCsvTemplate() {
+		String csv = "\uFEFF业务名词,描述,同义词,是否召回\r\nGMV,商品交易总额,\"成交总额,交易额\",true\r\n";
+		HttpHeaders headers = new HttpHeaders();
+		headers.setContentType(MediaType.parseMediaType("text/csv;charset=UTF-8"));
+		headers.setContentDisposition(ContentDisposition.attachment()
+			.filename("business_knowledge_template.csv", StandardCharsets.UTF_8)
+			.build());
+		return ResponseEntity.ok().headers(headers).body(csv.getBytes(StandardCharsets.UTF_8));
 	}
 
 	@PutMapping("/{id}")

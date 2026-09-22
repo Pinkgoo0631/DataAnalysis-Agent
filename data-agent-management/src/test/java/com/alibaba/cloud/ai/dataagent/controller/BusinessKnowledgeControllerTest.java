@@ -21,14 +21,21 @@ import com.alibaba.cloud.ai.dataagent.service.business.BusinessKnowledgeService;
 import com.alibaba.cloud.ai.dataagent.service.auth.ResourceOwnershipService;
 import com.alibaba.cloud.ai.dataagent.support.AuthenticationTestSupport;
 import com.alibaba.cloud.ai.dataagent.vo.ApiResponse;
+import com.alibaba.cloud.ai.dataagent.vo.BatchImportResult;
 import com.alibaba.cloud.ai.dataagent.vo.BusinessKnowledgeVO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.core.io.buffer.DefaultDataBufferFactory;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.security.core.Authentication;
+import reactor.core.publisher.Flux;
 
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -111,6 +118,34 @@ class BusinessKnowledgeControllerTest {
 
 		assertTrue(result.isSuccess());
 		assertEquals("GMV", result.getData().getBusinessTerm());
+	}
+
+	@Test
+	void importCsv_validFile_checksOwnershipAndReturnsResult() {
+		FilePart file = mock(FilePart.class);
+		byte[] content = "业务名词,描述\nGMV,商品交易总额\n".getBytes(StandardCharsets.UTF_8);
+		when(file.filename()).thenReturn("knowledge.csv");
+		when(file.content()).thenReturn(Flux.just(DefaultDataBufferFactory.sharedInstance.wrap(content)));
+		BatchImportResult importResult = BatchImportResult.builder().total(1).successCount(1).failCount(0).build();
+		when(businessKnowledgeService.importFromCsv(any(InputStream.class), eq("knowledge.csv"), eq(1L)))
+			.thenReturn(importResult);
+
+		ApiResponse<BatchImportResult> result = controller.importCsv(file, "1", authentication).block();
+
+		assertNotNull(result);
+		assertTrue(result.isSuccess());
+		assertEquals(1, result.getData().getSuccessCount());
+		verify(ownershipService).requireAgent(1L, authentication);
+	}
+
+	@Test
+	void downloadCsvTemplate_returnsUtf8Csv() {
+		ResponseEntity<byte[]> response = controller.downloadCsvTemplate();
+
+		assertTrue(response.getStatusCode().is2xxSuccessful());
+		assertNotNull(response.getBody());
+		String csv = new String(response.getBody(), StandardCharsets.UTF_8);
+		assertTrue(csv.startsWith("\uFEFF业务名词,描述,同义词,是否召回"));
 	}
 
 	@Test

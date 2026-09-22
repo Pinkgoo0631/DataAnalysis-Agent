@@ -17,8 +17,10 @@ package com.alibaba.cloud.ai.dataagent.service.business;
 
 import com.alibaba.cloud.ai.dataagent.dto.knowledge.businessknowledge.CreateBusinessKnowledgeDTO;
 import com.alibaba.cloud.ai.dataagent.dto.knowledge.businessknowledge.UpdateBusinessKnowledgeDTO;
+import com.alibaba.cloud.ai.dataagent.vo.BatchImportResult;
 import com.alibaba.cloud.ai.dataagent.vo.BusinessKnowledgeVO;
 
+import java.io.InputStream;
 import java.util.List;
 
 // TODO 添加一个分页查询的方法
@@ -33,6 +35,8 @@ public interface BusinessKnowledgeService {
 	BusinessKnowledgeVO getKnowledgeById(Long id);
 
 	BusinessKnowledgeVO addKnowledge(CreateBusinessKnowledgeDTO knowledgeDTO);
+
+	BatchImportResult importFromCsv(InputStream inputStream, String filename, Long agentId);
 
 	BusinessKnowledgeVO updateKnowledge(Long id, UpdateBusinessKnowledgeDTO knowledgeDTO);
 

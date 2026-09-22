@@ -22,6 +22,7 @@ import com.alibaba.cloud.ai.dataagent.entity.BusinessKnowledge;
 import com.alibaba.cloud.ai.dataagent.enums.EmbeddingStatus;
 import com.alibaba.cloud.ai.dataagent.mapper.BusinessKnowledgeMapper;
 import com.alibaba.cloud.ai.dataagent.service.vectorstore.AgentVectorStoreService;
+import com.alibaba.cloud.ai.dataagent.vo.BatchImportResult;
 import com.alibaba.cloud.ai.dataagent.vo.BusinessKnowledgeVO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,8 +33,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -188,6 +193,75 @@ class BusinessKnowledgeServiceImplTest {
 	}
 
 	@Test
+	void importFromCsv_validAndInvalidRows_reportsPartialResult() {
+		List<CreateBusinessKnowledgeDTO> importedDtos = new ArrayList<>();
+		AtomicLong idSequence = new AtomicLong(10);
+		when(businessKnowledgeConverter.toEntityForCreate(any())).thenAnswer(invocation -> {
+			CreateBusinessKnowledgeDTO dto = invocation.getArgument(0);
+			importedDtos.add(dto);
+			return BusinessKnowledge.builder()
+				.id(idSequence.incrementAndGet())
+				.businessTerm(dto.getBusinessTerm())
+				.description(dto.getDescription())
+				.synonyms(dto.getSynonyms())
+				.isRecall(dto.getIsRecall() ? 1 : 0)
+				.agentId(dto.getAgentId())
+				.embeddingStatus(EmbeddingStatus.PROCESSING)
+				.build();
+		});
+		when(businessKnowledgeMapper.insert(any())).thenReturn(1);
+		when(businessKnowledgeConverter.toVo(any())).thenAnswer(invocation -> {
+			BusinessKnowledge entity = invocation.getArgument(0);
+			return BusinessKnowledgeVO.builder()
+				.businessTerm(entity.getBusinessTerm())
+				.embeddingStatus(entity.getEmbeddingStatus().getValue())
+				.errorMsg(entity.getErrorMsg())
+				.build();
+		});
+
+		String csv = "\uFEFF业务名词,描述,同义词,是否召回\n"
+				+ "GMV,商品交易总额,\"成交总额,交易额\",true\n"
+				+ ",缺少业务名词,,true\n"
+				+ "MAU,月活跃用户数,月活,false\n";
+		BatchImportResult result = service.importFromCsv(
+				new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8)), "knowledge.csv", 42L);
+
+		assertEquals(3, result.getTotal());
+		assertEquals(2, result.getSuccessCount());
+		assertEquals(1, result.getFailCount());
+		assertTrue(result.getErrors().get(0).contains("第3行"));
+		assertEquals(2, importedDtos.size());
+		assertEquals(42L, importedDtos.get(0).getAgentId());
+		assertEquals("成交总额,交易额", importedDtos.get(0).getSynonyms());
+		assertFalse(importedDtos.get(1).getIsRecall());
+	}
+
+	@Test
+	void importFromCsv_missingRequiredHeader_throwsBeforeInsert() {
+		String csv = "业务名词,同义词\nGMV,交易额\n";
+
+		IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+				() -> service.importFromCsv(new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8)),
+						"knowledge.csv", 42L));
+
+		assertTrue(error.getMessage().contains("描述"));
+		verify(businessKnowledgeMapper, never()).insert(any());
+	}
+
+	@Test
+	void importFromCsv_invalidRecallValue_reportsRowError() {
+		String csv = "businessTerm,description,isRecall\nGMV,商品交易总额,sometimes\n";
+
+		BatchImportResult result = service.importFromCsv(
+				new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8)), "knowledge.csv", 42L);
+
+		assertEquals(1, result.getTotal());
+		assertEquals(0, result.getSuccessCount());
+		assertEquals(1, result.getFailCount());
+		verify(businessKnowledgeMapper, never()).insert(any());
+	}
+
+	@Test
 	void updateKnowledge_notFound_throws() {
 		when(businessKnowledgeMapper.selectById(999L)).thenReturn(null);
 		UpdateBusinessKnowledgeDTO dto = new UpdateBusinessKnowledgeDTO();
@@ -254,7 +328,7 @@ class BusinessKnowledgeServiceImplTest {
 
 		service.recallKnowledge(1L, true);
 		assertEquals(1, testKnowledge.getIsRecall());
-		verify(businessKnowledgeMapper).updateById(testKnowledge);
+		verify(businessKnowledgeMapper, times(2)).updateById(testKnowledge);
 	}
 
 	@Test

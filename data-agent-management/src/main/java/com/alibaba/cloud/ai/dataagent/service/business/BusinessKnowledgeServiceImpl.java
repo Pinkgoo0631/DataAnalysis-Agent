@@ -25,24 +25,44 @@ import com.alibaba.cloud.ai.dataagent.dto.knowledge.businessknowledge.UpdateBusi
 import com.alibaba.cloud.ai.dataagent.entity.BusinessKnowledge;
 import com.alibaba.cloud.ai.dataagent.mapper.BusinessKnowledgeMapper;
 import com.alibaba.cloud.ai.dataagent.service.vectorstore.AgentVectorStoreService;
+import com.alibaba.cloud.ai.dataagent.vo.BatchImportResult;
 import com.alibaba.cloud.ai.dataagent.vo.BusinessKnowledgeVO;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVParser;
+import org.apache.commons.csv.CSVRecord;
 import org.springframework.ai.document.Document;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.PushbackInputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 @Slf4j
 @Service
 @AllArgsConstructor
 public class BusinessKnowledgeServiceImpl implements BusinessKnowledgeService {
+
+	private static final int MAX_CSV_RECORDS = 1000;
+
+	private static final Set<String> TRUE_VALUES = Set.of("true", "1", "yes", "y", "是", "召回");
+
+	private static final Set<String> FALSE_VALUES = Set.of("false", "0", "no", "n", "否", "不召回");
 
 	private final BusinessKnowledgeMapper businessKnowledgeMapper;
 
@@ -119,6 +139,169 @@ public class BusinessKnowledgeServiceImpl implements BusinessKnowledgeService {
 			log.error("Failed to add knowledge to vector store for id: {}, error: {}", entity.getId(), errorMsg);
 		}
 		return businessKnowledgeConverter.toVo(entity);
+	}
+
+	@Override
+	public BatchImportResult importFromCsv(InputStream inputStream, String filename, Long agentId) {
+		if (inputStream == null) {
+			throw new IllegalArgumentException("CSV文件不能为空");
+		}
+		if (agentId == null) {
+			throw new IllegalArgumentException("智能体ID不能为空");
+		}
+		if (!StringUtils.hasText(filename) || !filename.toLowerCase(Locale.ROOT).endsWith(".csv")) {
+			throw new IllegalArgumentException("仅支持.csv格式的文件");
+		}
+
+		List<CsvImportRow> rows = parseCsv(inputStream);
+		if (rows.isEmpty()) {
+			throw new IllegalArgumentException("CSV文件中没有可导入的数据");
+		}
+		if (rows.size() > MAX_CSV_RECORDS) {
+			throw new IllegalArgumentException("单次最多导入" + MAX_CSV_RECORDS + "条业务知识");
+		}
+
+		BatchImportResult result = BatchImportResult.builder()
+			.total(rows.size())
+			.successCount(0)
+			.failCount(0)
+			.build();
+
+		for (CsvImportRow row : rows) {
+			if (row.error() != null) {
+				addImportError(result, row.lineNumber(), row.error());
+				continue;
+			}
+
+			CreateBusinessKnowledgeDTO dto = row.knowledge();
+			dto.setAgentId(agentId);
+			try {
+				BusinessKnowledgeVO imported = addKnowledge(dto);
+				if (EmbeddingStatus.FAILED.getValue().equals(imported.getEmbeddingStatus())) {
+					addImportError(result, row.lineNumber(), "知识已保存，但向量化失败：" + imported.getErrorMsg());
+				}
+				else {
+					result.setSuccessCount(result.getSuccessCount() + 1);
+				}
+			}
+			catch (Exception e) {
+				addImportError(result, row.lineNumber(), e.getMessage());
+			}
+		}
+
+		return result;
+	}
+
+	private List<CsvImportRow> parseCsv(InputStream inputStream) {
+		try (BufferedReader reader = new BufferedReader(
+				new InputStreamReader(skipUtf8Bom(inputStream), StandardCharsets.UTF_8));
+				CSVParser parser = CSVFormat.DEFAULT.builder()
+					.setHeader()
+					.setSkipHeaderRecord(true)
+					.setIgnoreEmptyLines(true)
+					.setTrim(true)
+					.build()
+					.parse(reader)) {
+			Map<String, String> headers = normalizedHeaders(parser.getHeaderMap().keySet());
+			String termHeader = requiredHeader(headers, "业务名词", "businessterm", "term");
+			String descriptionHeader = requiredHeader(headers, "描述", "description");
+			String synonymsHeader = optionalHeader(headers, "同义词", "synonyms");
+			String recallHeader = optionalHeader(headers, "是否召回", "isrecall");
+
+			List<CsvImportRow> rows = new ArrayList<>();
+			for (CSVRecord record : parser) {
+				int lineNumber = Math.toIntExact(record.getRecordNumber() + 1);
+				try {
+					String businessTerm = value(record, termHeader);
+					String description = value(record, descriptionHeader);
+					if (!StringUtils.hasText(businessTerm)) {
+						rows.add(new CsvImportRow(lineNumber, null, "业务名词不能为空"));
+						continue;
+					}
+					if (!StringUtils.hasText(description)) {
+						rows.add(new CsvImportRow(lineNumber, null, "描述不能为空"));
+						continue;
+					}
+
+					CreateBusinessKnowledgeDTO dto = CreateBusinessKnowledgeDTO.builder()
+						.businessTerm(businessTerm)
+						.description(description)
+						.synonyms(value(record, synonymsHeader))
+						.isRecall(parseRecall(value(record, recallHeader)))
+						.build();
+					rows.add(new CsvImportRow(lineNumber, dto, null));
+				}
+				catch (IllegalArgumentException e) {
+					rows.add(new CsvImportRow(lineNumber, null, e.getMessage()));
+				}
+			}
+			return rows;
+		}
+		catch (IOException e) {
+			throw new IllegalArgumentException("CSV文件读取失败：" + e.getMessage(), e);
+		}
+	}
+
+	private InputStream skipUtf8Bom(InputStream inputStream) throws IOException {
+		PushbackInputStream pushbackInputStream = new PushbackInputStream(inputStream, 3);
+		byte[] prefix = pushbackInputStream.readNBytes(3);
+		if (!(prefix.length == 3 && prefix[0] == (byte) 0xEF && prefix[1] == (byte) 0xBB
+				&& prefix[2] == (byte) 0xBF)) {
+			pushbackInputStream.unread(prefix);
+		}
+		return pushbackInputStream;
+	}
+
+	private Map<String, String> normalizedHeaders(Set<String> headerNames) {
+		Map<String, String> headers = new LinkedHashMap<>();
+		for (String headerName : headerNames) {
+			headers.put(headerName.trim().toLowerCase(Locale.ROOT), headerName);
+		}
+		return headers;
+	}
+
+	private String requiredHeader(Map<String, String> headers, String... aliases) {
+		String header = optionalHeader(headers, aliases);
+		if (header == null) {
+			throw new IllegalArgumentException("CSV缺少必填列：" + aliases[0]);
+		}
+		return header;
+	}
+
+	private String optionalHeader(Map<String, String> headers, String... aliases) {
+		for (String alias : aliases) {
+			String header = headers.get(alias.toLowerCase(Locale.ROOT));
+			if (header != null) {
+				return header;
+			}
+		}
+		return null;
+	}
+
+	private String value(CSVRecord record, String header) {
+		return header == null ? "" : record.get(header).trim();
+	}
+
+	private Boolean parseRecall(String value) {
+		if (!StringUtils.hasText(value)) {
+			return true;
+		}
+		String normalized = value.trim().toLowerCase(Locale.ROOT);
+		if (TRUE_VALUES.contains(normalized)) {
+			return true;
+		}
+		if (FALSE_VALUES.contains(normalized)) {
+			return false;
+		}
+		throw new IllegalArgumentException("是否召回仅支持true/false、1/0、是/否");
+	}
+
+	private void addImportError(BatchImportResult result, int lineNumber, String message) {
+		result.setFailCount(result.getFailCount() + 1);
+		result.addError("第" + lineNumber + "行：" + (StringUtils.hasText(message) ? message : "导入失败"));
+	}
+
+	private record CsvImportRow(int lineNumber, CreateBusinessKnowledgeDTO knowledge, String error) {
 	}
 
 	@Override
