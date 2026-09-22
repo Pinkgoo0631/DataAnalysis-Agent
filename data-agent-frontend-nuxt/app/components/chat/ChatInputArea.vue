@@ -1,25 +1,17 @@
-/*
- * Copyright 2026 the original author or authors.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+/* * Copyright 2026 the original author or authors. * * Licensed under the
+Apache License, Version 2.0 (the "License"); * you may not use this file except
+in compliance with the License. * You may obtain a copy of the License at * *
+https://www.apache.org/licenses/LICENSE-2.0 * * Unless required by applicable
+law or agreed to in writing, software * distributed under the License is
+distributed on an "AS IS" BASIS, * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+either express or implied. * See the License for the specific language governing
+permissions and * limitations under the License. */
 
 <template>
 	<div class="input-area">
 		<!-- Status / Info bar -->
 		<div class="status-bar">
 			<div class="status-chips">
-
 				<!-- Datasource selector -->
 				<div class="ds-chip-wrap" @click.stop>
 					<div
@@ -29,7 +21,9 @@
 					>
 						<v-icon size="13" color="#64748b">mdi-database-outline</v-icon>
 						<span>{{ store.activeDatasource?.name || '选择数据库' }}</span>
-						<v-icon size="13" color="#94a3b8">{{ showDsMenu ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
+						<v-icon size="13" color="#94a3b8">{{
+							showDsMenu ? 'mdi-chevron-up' : 'mdi-chevron-down'
+						}}</v-icon>
 					</div>
 					<div v-if="showDsMenu" class="chip-dropdown">
 						<div
@@ -49,12 +43,18 @@
 				<div class="ds-chip-wrap" @click.stop>
 					<div
 						class="status-chip status-chip--model"
-						:class="{ disabled: store.isStreaming || store.chatModels.length === 0 }"
+						:class="{
+							disabled: store.isStreaming || store.chatModels.length === 0,
+						}"
 						@click="toggleModelMenu"
 					>
-						<v-icon size="13" color="#3b82f6">mdi-lightning-bolt</v-icon>
-						<span>{{ store.activeModelConfig?.modelName || '选择AI模型' }}</span>
-						<v-icon size="13" color="#94a3b8">{{ showModelMenu ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
+						<v-icon size="13" color="#477b91">mdi-lightning-bolt</v-icon>
+						<span>{{
+							store.activeModelConfig?.modelName || '选择AI模型'
+						}}</span>
+						<v-icon size="13" color="#94a3b8">{{
+							showModelMenu ? 'mdi-chevron-up' : 'mdi-chevron-down'
+						}}</v-icon>
 					</div>
 					<div v-if="showModelMenu" class="chip-dropdown">
 						<div
@@ -69,7 +69,6 @@
 						</div>
 					</div>
 				</div>
-
 			</div>
 		</div>
 
@@ -91,7 +90,10 @@
 		<div class="action-bar">
 			<div class="action-bar-left">
 				<div class="extra-options">
-					<label class="option-chip" :class="{ active: store.requestOptions.humanFeedback }">
+					<label
+						class="option-chip"
+						:class="{ active: store.requestOptions.humanFeedback }"
+					>
 						<input
 							v-model="store.requestOptions.humanFeedback"
 							type="checkbox"
@@ -101,7 +103,10 @@
 						<v-icon size="11">mdi-account-check-outline</v-icon>
 						人工反馈
 					</label>
-					<label class="option-chip" :class="{ active: store.requestOptions.nl2sqlOnly }">
+					<label
+						class="option-chip"
+						:class="{ active: store.requestOptions.nl2sqlOnly }"
+					>
 						<input
 							v-model="store.requestOptions.nl2sqlOnly"
 							type="checkbox"
@@ -112,7 +117,10 @@
 						<v-icon size="11">mdi-database-search-outline</v-icon>
 						仅NL2SQL
 					</label>
-					<label class="option-chip" :class="{ active: store.requestOptions.showSqlResults }">
+					<label
+						class="option-chip"
+						:class="{ active: store.requestOptions.showSqlResults }"
+					>
 						<input
 							v-model="store.requestOptions.showSqlResults"
 							type="checkbox"
@@ -146,7 +154,9 @@
 		<Transition name="slide-up">
 			<div v-if="store.showHumanFeedback" class="human-feedback-panel">
 				<div class="feedback-header">
-					<v-icon color="warning" size="16" class="mr-1">mdi-account-question-outline</v-icon>
+					<v-icon color="warning" size="16" class="mr-1"
+						>mdi-account-question-outline</v-icon
+					>
 					<span>请确认执行计划</span>
 				</div>
 				<textarea
@@ -156,10 +166,16 @@
 					placeholder="输入您的反馈意见（留空表示接受计划）"
 				/>
 				<div class="feedback-actions">
-					<v-btn class="feedback-btn feedback-btn--accept" @click="store.submitFeedback(false, store.feedbackContent)">
+					<v-btn
+						class="feedback-btn feedback-btn--accept"
+						@click="store.submitFeedback(false, store.feedbackContent)"
+					>
 						<v-icon size="14" class="mr-1">mdi-check</v-icon>接受计划
 					</v-btn>
-					<v-btn class="feedback-btn feedback-btn--reject" @click="store.submitFeedback(true, store.feedbackContent)">
+					<v-btn
+						class="feedback-btn feedback-btn--reject"
+						@click="store.submitFeedback(true, store.feedbackContent)"
+					>
 						<v-icon size="14" class="mr-1">mdi-close</v-icon>拒绝重规划
 					</v-btn>
 				</div>
@@ -189,12 +205,12 @@ function toggleModelMenu() {
 	if (showModelMenu.value) showDsMenu.value = false;
 }
 
-async function selectDs(ds: typeof store.allDatasources[0]) {
+async function selectDs(ds: (typeof store.allDatasources)[0]) {
 	showDsMenu.value = false;
 	await store.switchDatasource(ds);
 }
 
-async function selectModel(m: typeof store.chatModels[0]) {
+async function selectModel(m: (typeof store.chatModels)[0]) {
 	showModelMenu.value = false;
 	if (m.id !== undefined) await store.switchModel(m.id);
 }
@@ -250,9 +266,9 @@ onUnmounted(() => document.removeEventListener('click', closeMenus));
 <style scoped>
 .input-area {
 	flex-shrink: 0;
-	background: white;
-	border-top: 1px solid #e8edf2;
-	padding: 12px 32px 16px;
+	background: transparent;
+	border-top: 0;
+	padding: 8px 24px 16px;
 }
 
 /* ── Status bar ──────────────────────────────────────────────────────────────── */
@@ -275,30 +291,32 @@ onUnmounted(() => document.removeEventListener('click', closeMenus));
 	align-items: center;
 	gap: 5px;
 	padding: 4px 10px;
-	background: #f1f5f9;
-	border: 1px solid #e2e8f0;
-	border-radius: 20px;
-	font-size: 12.5px;
-	color: #475569;
+	background: #eef2f3;
+	border: 1px solid var(--da-line);
+	border-radius: 3px;
+	font-size: 12px;
+	color: #4f5a60;
 	cursor: pointer;
 	user-select: none;
 	white-space: nowrap;
-	transition: border-color 0.1s, background 0.1s;
+	transition:
+		border-color 0.1s,
+		background 0.1s;
 }
 .status-chip:hover:not(.disabled) {
-	border-color: #94a3b8;
+	border-color: var(--da-steel-600);
 }
 .status-chip.disabled {
 	opacity: 0.5;
 	cursor: not-allowed;
 }
 .status-chip--model {
-	background: #eff6ff;
-	border-color: #bfdbfe;
-	color: #1d4ed8;
+	background: #e9f0f2;
+	border-color: #b9cdd5;
+	color: #315f72;
 }
 .status-chip--model:hover:not(.disabled) {
-	border-color: #93c5fd;
+	border-color: var(--da-steel-600);
 }
 
 .chip-dropdown {
@@ -307,9 +325,9 @@ onUnmounted(() => document.removeEventListener('click', closeMenus));
 	left: 0;
 	z-index: 999;
 	background: white;
-	border: 1px solid #e2e8f0;
-	border-radius: 10px;
-	box-shadow: 0 4px 16px rgba(0,0,0,0.10);
+	border: 1px solid var(--da-line-strong);
+	border-radius: 3px;
+	box-shadow: 0 10px 24px rgba(29, 34, 38, 0.14);
 	min-width: 200px;
 	max-width: 300px;
 	max-height: 280px;
@@ -324,17 +342,17 @@ onUnmounted(() => document.removeEventListener('click', closeMenus));
 	gap: 8px;
 	padding: 7px 14px;
 	font-size: 13px;
-	color: #334155;
+	color: var(--da-text);
 	cursor: pointer;
 	transition: background 0.1s;
 }
 .chip-dropdown-item:hover {
-	background: #f1f5f9;
+	background: #edf1f2;
 }
 .chip-dropdown-item.active {
-	background: #eff6ff;
-	color: #2563eb;
-	font-weight: 500;
+	background: var(--da-signal-100);
+	color: var(--da-signal-600);
+	font-weight: 650;
 }
 .item-name {
 	flex: 1;
@@ -345,23 +363,26 @@ onUnmounted(() => document.removeEventListener('click', closeMenus));
 .item-tag {
 	flex-shrink: 0;
 	font-size: 11px;
-	color: #94a3b8;
-	background: #f1f5f9;
-	border-radius: 4px;
+	color: #7b878d;
+	background: #e9edef;
+	border-radius: 2px;
 	padding: 1px 5px;
 }
 
 /* ── Textarea ────────────────────────────────────────────────────────────────── */
 .textarea-wrap {
-	background: #f8fafc;
-	border: 1.5px solid #e2e8f0;
-	border-radius: 14px;
+	background: #fff;
+	border: 1px solid var(--da-line-strong);
+	border-radius: 0;
 	overflow: hidden;
-	transition: border-color 0.15s;
+	transition:
+		border-color 0.15s,
+		box-shadow 0.15s;
 }
 .textarea-wrap:focus-within {
-	border-color: #3b82f6;
+	border-color: var(--da-steel-600);
 	background: #fff;
+	box-shadow: inset 3px 0 0 var(--da-signal-500);
 }
 .chat-textarea {
 	display: block;
@@ -373,13 +394,13 @@ onUnmounted(() => document.removeEventListener('click', closeMenus));
 	resize: vertical;
 	font-size: 14.5px;
 	line-height: 1.6;
-	color: #1e293b;
+	color: var(--da-text);
 	font-family: inherit;
-	min-height: 80px;
+	min-height: 66px;
 	max-height: 300px;
 }
 .chat-textarea::placeholder {
-	color: #94a3b8;
+	color: #8a959a;
 }
 .chat-textarea:disabled {
 	opacity: 0.6;
@@ -411,23 +432,25 @@ onUnmounted(() => document.removeEventListener('click', closeMenus));
 	align-items: center;
 	gap: 4px;
 	padding: 3px 10px;
-	background: #f8fafc;
-	border: 1px solid #e2e8f0;
-	border-radius: 16px;
+	background: #f4f6f6;
+	border: 1px solid var(--da-line);
+	border-radius: 3px;
 	font-size: 12px;
-	color: #64748b;
+	color: #667178;
 	cursor: pointer;
-	transition: border-color 0.1s, background 0.1s;
+	transition:
+		border-color 0.1s,
+		background 0.1s;
 	user-select: none;
 }
 .option-chip:hover {
-	border-color: #3b82f6;
-	color: #3b82f6;
+	border-color: var(--da-steel-600);
+	color: var(--da-steel-600);
 }
 .option-chip.active {
-	background: #eff6ff;
-	border-color: #3b82f6;
-	color: #2563eb;
+	background: #e9f0f2;
+	border-color: var(--da-steel-600);
+	color: #315f72;
 }
 .hidden-checkbox {
 	position: absolute;
@@ -441,19 +464,29 @@ onUnmounted(() => document.removeEventListener('click', closeMenus));
 	display: inline-flex;
 	align-items: center;
 	gap: 8px;
-	padding: 10px 24px;
-	background: #2563eb;
+	padding: 9px 20px;
+	background: var(--da-signal-500);
 	color: white;
 	border: none;
-	border-radius: 24px;
-	font-size: 14px;
+	border-radius: 0;
+	font-size: 13px;
 	font-weight: 600;
 	cursor: pointer;
-	transition: background 0.15s, opacity 0.15s;
+	transition:
+		background 0.15s,
+		opacity 0.15s;
 	white-space: nowrap;
 }
 .send-btn:hover:not(:disabled) {
-	background: #1d4ed8;
+	background: var(--da-signal-600);
+}
+
+.send-btn :deep(.v-icon) {
+	transition: transform 140ms ease;
+}
+
+.send-btn:hover:not(:disabled) :deep(.v-icon) {
+	transform: translateX(3px);
 }
 .send-btn:disabled {
 	opacity: 0.4;
@@ -469,17 +502,17 @@ onUnmounted(() => document.removeEventListener('click', closeMenus));
 	align-items: center;
 	gap: 6px;
 	padding: 10px 20px;
-	background: #ef4444;
+	background: var(--da-danger);
 	color: white;
 	border: none;
-	border-radius: 24px;
+	border-radius: 3px;
 	font-size: 14px;
 	font-weight: 600;
 	cursor: pointer;
 	transition: background 0.15s;
 }
 .stop-btn:hover {
-	background: #dc2626;
+	background: #ad3b35;
 }
 
 /* ── Human feedback ──────────────────────────────────────────────────────────── */
@@ -487,7 +520,7 @@ onUnmounted(() => document.removeEventListener('click', closeMenus));
 	margin-top: 10px;
 	background: #fffbeb;
 	border: 1px solid #fde68a;
-	border-radius: 10px;
+	border-radius: 4px;
 	padding: 12px 14px;
 }
 .feedback-header {
@@ -502,7 +535,7 @@ onUnmounted(() => document.removeEventListener('click', closeMenus));
 	width: 100%;
 	background: white;
 	border: 1px solid #fde68a;
-	border-radius: 6px;
+	border-radius: 3px;
 	padding: 8px 10px;
 	font-size: 13px;
 	resize: none;
@@ -519,7 +552,7 @@ onUnmounted(() => document.removeEventListener('click', closeMenus));
 	display: inline-flex;
 	align-items: center;
 	padding: 6px 16px;
-	border-radius: 6px;
+	border-radius: 3px;
 	font-size: 12.5px;
 	font-weight: 600;
 	border: none;
@@ -540,10 +573,23 @@ onUnmounted(() => document.removeEventListener('click', closeMenus));
 }
 
 /* ── Transitions ─────────────────────────────────────────────────────────────── */
-.fade-enter-active, .fade-leave-active { transition: opacity 0.15s; }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
-.slide-up-enter-active, .slide-up-leave-active { transition: all 0.2s ease; }
-.slide-up-enter-from, .slide-up-leave-to { transform: translateY(10px); opacity: 0; }
+.fade-enter-active,
+.fade-leave-active {
+	transition: opacity 0.15s;
+}
+.fade-enter-from,
+.fade-leave-to {
+	opacity: 0;
+}
+.slide-up-enter-active,
+.slide-up-leave-active {
+	transition: all 0.2s ease;
+}
+.slide-up-enter-from,
+.slide-up-leave-to {
+	transform: translateY(10px);
+	opacity: 0;
+}
 
 @media (max-width: 768px) {
 	.input-area {

@@ -1,18 +1,11 @@
-/*
- * Copyright 2026 the original author or authors.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+/* * Copyright 2026 the original author or authors. * * Licensed under the
+Apache License, Version 2.0 (the "License"); * you may not use this file except
+in compliance with the License. * You may obtain a copy of the License at * *
+https://www.apache.org/licenses/LICENSE-2.0 * * Unless required by applicable
+law or agreed to in writing, software * distributed under the License is
+distributed on an "AS IS" BASIS, * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+either express or implied. * See the License for the specific language governing
+permissions and * limitations under the License. */
 
 <template>
 	<div
@@ -23,7 +16,10 @@
 		<div class="chat-sidebar">
 			<!-- Header -->
 			<div class="sidebar-header">
-				<span class="sidebar-title">历史会话</span>
+				<div>
+					<span class="sidebar-eyebrow instrument-code">RESEARCH INDEX</span>
+					<span class="sidebar-title">分析索引</span>
+				</div>
 				<v-btn
 					icon
 					variant="text"
@@ -39,7 +35,7 @@
 
 			<!-- Session List -->
 			<div class="session-list custom-scrollbar">
-				<div class="session-group-label">最近任务</div>
+				<div class="session-group-label">工作记录 / RECENT</div>
 
 				<div
 					v-for="session in store.sessions"
@@ -122,7 +118,7 @@
 					class="new-session-btn"
 					@click="handleCreateNewSession"
 				>
-					新建分析会话
+					新建研究页
 				</v-btn>
 			</div>
 		</div>
@@ -270,8 +266,8 @@ async function confirmDelete() {
 /* ── Wrapper: drives the width transition ────────────────────────────────────── */
 .sidebar-wrapper {
 	position: relative;
-	width: 260px;
-	min-width: 260px;
+	width: 232px;
+	min-width: 232px;
 	transition:
 		width 0.25s ease,
 		min-width 0.25s ease;
@@ -287,9 +283,10 @@ async function confirmDelete() {
 
 /* ── Expanded panel ──────────────────────────────────────────────────────────── */
 .chat-sidebar {
-	width: 260px;
-	background: #f8fafc;
-	border-right: 1px solid #e8edf2;
+	width: 232px;
+	background: #e9edee;
+	border: 0;
+	border-radius: 0;
 	display: flex;
 	flex-direction: column;
 	height: 100%;
@@ -307,25 +304,34 @@ async function confirmDelete() {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	padding: 10px 8px 10px 16px;
-	border-bottom: 1px solid #e8edf2;
-	min-height: 48px;
+	padding: 16px 8px 14px 16px;
+	border-bottom: 1px solid var(--da-line);
+	min-height: 72px;
 	flex-shrink: 0;
 }
 
 .sidebar-title {
+	display: block;
 	font-size: 13px;
-	font-weight: 600;
-	color: #475569;
+	font-weight: 720;
+	color: var(--da-graphite-900);
 	letter-spacing: 0.3px;
 	white-space: nowrap;
 }
 
+.sidebar-eyebrow {
+	display: block;
+	margin-bottom: 4px;
+	font-size: 8px;
+	color: #7e898f;
+	letter-spacing: 0.12em;
+}
+
 .toggle-btn {
-	color: #94a3b8 !important;
+	color: #78848a !important;
 }
 .toggle-btn:hover {
-	color: #3b82f6 !important;
+	color: var(--da-signal-500) !important;
 }
 
 /* ── Session list ────────────────────────────────────────────────────────────── */
@@ -336,12 +342,12 @@ async function confirmDelete() {
 }
 
 .session-group-label {
-	font-size: 11px;
+	font-size: 8px;
 	font-weight: 600;
-	color: #94a3b8;
+	color: #899399;
 	letter-spacing: 0.5px;
-	text-transform: uppercase;
-	padding: 8px 8px 6px;
+	padding: 14px 8px 8px;
+	font-family: var(--da-font-mono);
 }
 
 .session-item {
@@ -349,17 +355,21 @@ async function confirmDelete() {
 	align-items: center;
 	justify-content: space-between;
 	padding: 8px 10px;
-	border-radius: 8px;
+	border-radius: 0;
 	cursor: pointer;
 	transition: background 0.12s;
 	margin-bottom: 2px;
 	min-height: 44px;
 }
 .session-item:hover {
-	background: #e8f0fe;
+	background: rgba(255, 255, 255, 0.6);
 }
 .session-item.active {
-	background: #e8f0fe;
+	background: #fff;
+	box-shadow:
+		inset 3px 0 0 var(--da-signal-500),
+		0 1px 0 var(--da-line),
+		0 -1px 0 var(--da-line);
 }
 
 .session-item-info {
@@ -372,7 +382,7 @@ async function confirmDelete() {
 
 .session-item-title {
 	font-size: 13px;
-	color: #1e293b;
+	color: var(--da-text);
 	line-height: 1.35;
 	white-space: nowrap;
 	overflow: hidden;
@@ -381,14 +391,14 @@ async function confirmDelete() {
 
 .session-item-time {
 	font-size: 11px;
-	color: #94a3b8;
-	font-style: italic;
+	color: #899399;
+	font-family: var(--da-font-mono);
 	line-height: 1.2;
 }
 
 .session-item.active .session-item-title {
-	color: #1d4ed8;
-	font-weight: 500;
+	color: var(--da-graphite-900);
+	font-weight: 700;
 }
 
 /* ── Actions ─────────────────────────────────────────────────────────────────── */
@@ -418,8 +428,8 @@ async function confirmDelete() {
 .session-rename-input {
 	flex: 1;
 	font-size: 13px;
-	border: 1px solid #3b82f6;
-	border-radius: 4px;
+	border: 1px solid var(--da-signal-500);
+	border-radius: 2px;
 	padding: 2px 6px;
 	outline: none;
 	min-width: 0;
@@ -430,14 +440,14 @@ async function confirmDelete() {
 .empty-sessions {
 	text-align: center;
 	font-size: 12px;
-	color: #94a3b8;
+	color: #899399;
 	padding: 20px 0;
 }
 
 /* ── Bottom new session ──────────────────────────────────────────────────────── */
 .sidebar-bottom {
 	padding: 12px 16px 16px;
-	border-top: 1px solid #e8edf2;
+	border-top: 1px solid var(--da-line);
 	flex-shrink: 0;
 }
 
@@ -445,8 +455,10 @@ async function confirmDelete() {
 	text-transform: none !important;
 	letter-spacing: 0 !important;
 	font-size: 14px !important;
-	border-style: dashed !important;
-	border-radius: 10px !important;
+	border-style: solid !important;
+	border-radius: 0 !important;
+	color: var(--da-signal-600) !important;
+	border-color: rgba(231, 111, 60, 0.55) !important;
 }
 
 /* ── Collapsed expand FAB ────────────────────────────────────────────────────── */
@@ -455,7 +467,8 @@ async function confirmDelete() {
 	top: 10px;
 	left: 8px;
 	z-index: 10;
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12) !important;
+	border: 1px solid var(--da-line) !important;
+	box-shadow: var(--da-shadow-panel) !important;
 }
 
 /* ── Scrollbar ───────────────────────────────────────────────────────────────── */
@@ -466,11 +479,11 @@ async function confirmDelete() {
 	background: transparent;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-	background: #cbd5e1;
-	border-radius: 4px;
+	background: var(--da-line-strong);
+	border-radius: 2px;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-	background: #94a3b8;
+	background: #899399;
 }
 
 @media (max-width: 768px) {
