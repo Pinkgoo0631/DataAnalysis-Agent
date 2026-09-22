@@ -15,6 +15,7 @@
  */
 package com.alibaba.cloud.ai.dataagent.service.integration;
 
+import com.alibaba.cloud.ai.dataagent.config.ChromaSchemaInitializer;
 import com.alibaba.cloud.ai.dataagent.support.KeywordEmbeddingModel;
 import java.util.List;
 import java.util.Map;
@@ -44,7 +45,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * </pre>
  *
  * <p>
- * 默认连接 {@code http://localhost:8000}。可以通过
+ * 默认连接 {@code http://localhost:9000}。可以通过
  * {@code -Ddataagent.chroma.url=http://host:port} 覆盖。
  * </p>
  */
@@ -63,10 +64,11 @@ class ChromaVectorStoreBasicFlowIntegrationTest {
 
 	@BeforeEach
 	void setUp() throws Exception {
-		String chromaUrl = System.getProperty("dataagent.chroma.url", "http://localhost:8000");
+		String chromaUrl = System.getProperty("dataagent.chroma.url", "http://localhost:9000");
 		collectionName = "data_agent_test_" + UUID.randomUUID().toString().replace("-", "");
 
 		chromaApi = ChromaApi.builder().baseUrl(chromaUrl).build();
+		new ChromaSchemaInitializer(chromaApi, DEFAULT_TENANT, DEFAULT_DATABASE, collectionName).initialize();
 		vectorStore = ChromaVectorStore.builder(chromaApi, new KeywordEmbeddingModel())
 			.tenantName(DEFAULT_TENANT)
 			.databaseName(DEFAULT_DATABASE)

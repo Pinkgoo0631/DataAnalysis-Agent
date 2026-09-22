@@ -15,6 +15,7 @@
  */
 package com.alibaba.cloud.ai.dataagent.service.integration;
 
+import com.alibaba.cloud.ai.dataagent.config.ChromaSchemaInitializer;
 import com.alibaba.cloud.ai.dataagent.dto.search.HybridSearchRequest;
 import com.alibaba.cloud.ai.dataagent.service.hybrid.fusion.impl.RrfFusionStrategy;
 import com.alibaba.cloud.ai.dataagent.service.hybrid.keyword.impl.LuceneKeywordIndexService;
@@ -61,9 +62,10 @@ class ChromaLuceneHybridRetrievalIntegrationTest {
 
 	@BeforeEach
 	void setUp() throws Exception {
-		String chromaUrl = System.getProperty("dataagent.chroma.url", "http://localhost:8000");
+		String chromaUrl = System.getProperty("dataagent.chroma.url", "http://localhost:9000");
 		collectionName = "hybrid_test_" + UUID.randomUUID().toString().replace("-", "");
 		chromaApi = ChromaApi.builder().baseUrl(chromaUrl).build();
+		new ChromaSchemaInitializer(chromaApi, TENANT, DATABASE, collectionName).initialize();
 		vectorStore = ChromaVectorStore.builder(chromaApi, new KeywordEmbeddingModel())
 			.tenantName(TENANT)
 			.databaseName(DATABASE)
