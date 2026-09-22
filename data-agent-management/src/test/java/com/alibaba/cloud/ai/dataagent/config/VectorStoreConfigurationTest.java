@@ -31,6 +31,8 @@ import org.springframework.ai.vectorstore.chroma.autoconfigure.ChromaApiProperti
 import org.springframework.ai.vectorstore.chroma.autoconfigure.ChromaVectorStoreProperties;
 
 import java.lang.reflect.Method;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -88,6 +90,16 @@ class VectorStoreConfigurationTest {
 			.isEqualTo("${DATA_AGENT_DATASOURCE_USERNAME}");
 		assertThat(property("application.yml", "spring.datasource.password"))
 			.isEqualTo("${DATA_AGENT_DATASOURCE_PASSWORD}");
+	}
+
+	@Test
+	void dockerCompose_exposesConfigurableHostPortsAndKeepsContainerPortsInternal() throws Exception {
+		String compose = Files.readString(Path.of("..", "docker-file", "docker-compose.yml"));
+
+		assertThat(compose).contains("${CHROMA_PORT:-9000}:8000");
+		assertThat(compose).contains("- CHROMA_PORT=8000");
+		assertThat(compose).contains("${SERVER_HOST_PORT:-9065}:8065");
+		assertThat(compose).contains("- SERVER_PORT=8065");
 	}
 
 	@Test

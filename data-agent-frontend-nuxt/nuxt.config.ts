@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 
+import { createBackendProxyRouteRules } from './config/backendProxy';
+
+const backendProxyRouteRules = createBackendProxyRouteRules();
+
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
 	compatibilityDate: '2025-07-15',
@@ -62,9 +66,8 @@ export default defineNuxtConfig({
 	// /路由重定向到/create-agent
 	routeRules: {
 		'/': { redirect: '/agent/new' },
-		// 代理所有 /api/** 的请求到 Java 后端
-		'/api/**': { proxy: 'http://localhost:8065/api/**' },
-		'/nl2sql/**': { proxy: 'http://localhost:8065/nl2sql/**' },
+		// 本地开发代理从根目录 .env 读取；Docker 部署由 nginx 转发到 backend:8065。
+		...backendProxyRouteRules,
 	},
 	//全局动画配置
 	app: {

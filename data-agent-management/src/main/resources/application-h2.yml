@@ -1,5 +1,5 @@
 server:
-  port: 8065
+  port: ${SERVER_PORT:8065}
 
 # 存储 DataAgent 业务数据的数据库，并非Agent分析数据的来源
 spring:

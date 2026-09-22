@@ -1,5 +1,5 @@
 server:
-  port: 8065
+  port: ${SERVER_PORT:8065}
 
 springdoc:
   api-docs:
@@ -9,6 +9,10 @@ springdoc:
 
 # 存储 DataAgent 业务数据的数据库，并非Agent分析数据的来源
 spring:
+  # .env 以普通 properties 文件导入时不会自动把大写下划线变量映射为 Spring 属性，
+  # 因此显式桥接该变量，使同一份 .env 可同时用于本地启动和 Docker env_file。
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:}
   config:
     # 从仓库根目录或模块父目录加载本地配置；文件不存在时仍允许通过系统环境变量启动。
     import:

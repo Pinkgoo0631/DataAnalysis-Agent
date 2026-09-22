@@ -15,13 +15,14 @@
 services:
   # 默认向量数据库
   chroma:
-    image: ghcr.io/chroma-core/chroma:1.0.0
+    image: chromadb/chroma
     container_name: data-agent-chroma
     environment:
       - IS_PERSISTENT=TRUE
       - PERSIST_DIRECTORY=/data
     ports:
-      - "8000:8000"
+      # 宿主机端口与本地运行的 Backend 共用 CHROMA_PORT；容器内端口固定为 8000。
+      - "${CHROMA_PORT:-9000}:8000"
     volumes:
       - chroma-data:/data
     networks:
@@ -41,9 +42,12 @@ services:
     environment:
       # 容器内通过服务名访问 Chroma；其余配置统一从仓库根目录 .env 注入。
       - CHROMA_HOST=${CHROMA_DOCKER_HOST:-http://chroma}
+      - CHROMA_PORT=8000
+      # 容器网络继续使用固定的 8065；宿主机发布端口单独配置。
+      - SERVER_PORT=8065
       - KEYWORD_INDEX_PATH=/app/vectorstore/lucene
     ports:
-      - "8065:8065"
+      - "${SERVER_HOST_PORT:-9065}:8065"
     depends_on:
       chroma:
         condition: service_started
