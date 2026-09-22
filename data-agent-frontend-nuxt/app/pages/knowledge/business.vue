@@ -42,6 +42,15 @@
 					同步到向量库
 				</v-btn>
 				<v-btn
+					color="blue-darken-1"
+					variant="tonal"
+					prepend-icon="mdi-file-upload-outline"
+					class="text-none px-6"
+					@click="openImportDialog"
+				>
+					CSV 批量导入
+				</v-btn>
+				<v-btn
 					color="blue-darken-3"
 					prepend-icon="mdi-plus"
 					class="text-none px-6"
@@ -370,12 +379,115 @@
 				</v-card-actions>
 			</v-card>
 		</v-dialog>
+
+		<!-- CSV 批量导入 Dialog -->
+		<v-dialog v-model="importDialogVisible" max-width="720" persistent>
+			<v-card rounded="lg">
+				<v-card-title class="d-flex align-center pa-6 pb-4">
+					<v-icon
+						icon="mdi-file-delimited-outline"
+						color="blue-darken-2"
+						class="mr-3"
+						size="28"
+					/>
+					<span class="text-h6 font-weight-bold">CSV 批量导入业务知识</span>
+					<v-spacer />
+					<v-btn
+						icon="mdi-close"
+						variant="text"
+						size="small"
+						:disabled="importLoading"
+						@click="importDialogVisible = false"
+					/>
+				</v-card-title>
+
+				<v-divider />
+
+				<v-card-text class="pa-6">
+					<v-alert type="info" variant="tonal" density="compact" class="mb-5">
+						CSV 必须包含“业务名词”和“描述”列；“同义词”和“是否召回”可选。
+						是否召回支持 true/false、1/0、是/否，留空时默认为是。单次最多导入
+						1000 条。
+					</v-alert>
+
+					<v-file-input
+						v-model="importFile"
+						label="选择 CSV 文件"
+						accept=".csv,text/csv"
+						prepend-icon="mdi-file-delimited"
+						variant="outlined"
+						density="compact"
+						show-size
+						clearable
+						hide-details="auto"
+					/>
+
+					<v-alert
+						v-if="importResult"
+						:type="importResult.failCount > 0 ? 'warning' : 'success'"
+						variant="tonal"
+						class="mt-5"
+					>
+						<div class="font-weight-medium">
+							导入完成：成功 {{ importResult.successCount }} 条，失败
+							{{ importResult.failCount }} 条
+						</div>
+						<ul v-if="importResult.errors.length" class="mt-2 pl-5">
+							<li
+								v-for="error in importResult.errors.slice(0, 10)"
+								:key="error"
+							>
+								{{ error }}
+							</li>
+						</ul>
+						<div v-if="importResult.errors.length > 10" class="mt-1">
+							另有 {{ importResult.errors.length - 10 }} 条错误未展示
+						</div>
+					</v-alert>
+				</v-card-text>
+
+				<v-divider />
+
+				<v-card-actions class="pa-4 d-flex justify-space-between">
+					<v-btn
+						variant="tonal"
+						color="blue-darken-1"
+						prepend-icon="mdi-download"
+						class="text-none"
+						@click="downloadCsvTemplate"
+					>
+						下载模板
+					</v-btn>
+					<div class="d-flex ga-2">
+						<v-btn
+							variant="outlined"
+							class="text-none"
+							:disabled="importLoading"
+							@click="importDialogVisible = false"
+						>
+							关闭
+						</v-btn>
+						<v-btn
+							color="blue-darken-3"
+							prepend-icon="mdi-upload"
+							class="text-none"
+							elevation="0"
+							:loading="importLoading"
+							@click="executeCsvImport"
+						>
+							开始导入
+						</v-btn>
+					</div>
+				</v-card-actions>
+			</v-card>
+		</v-dialog>
 	</section>
 </template>
 
 <script setup lang="ts">
 import businessKnowledgeService, {
 	type BusinessKnowledgeVO,
+	type BatchImportResult,
 	type CreateBusinessKnowledgeDTO,
 	type UpdateBusinessKnowledgeDTO,
 } from '~/services/businessKnowledge/index';
@@ -397,6 +509,10 @@ const refreshLoading = ref(false);
 const searchKeyword = ref('');
 const currentEditId = ref<number | null>(null);
 const retryLoadingMap = ref<Record<number, boolean>>({});
+const importDialogVisible = ref(false);
+const importFile = ref<File | null>(null);
+const importLoading = ref(false);
+const importResult = ref<BatchImportResult | null>(null);
 
 // ——— useCrudPage ———
 const {
@@ -445,6 +561,12 @@ function openCreateDialog() {
 	// Ensure agentId is current before opening
 	_openCreateDialog();
 	knowledgeForm.value.agentId = agentId.value;
+}
+
+function openImportDialog() {
+	importFile.value = null;
+	importResult.value = null;
+	importDialogVisible.value = true;
 }
 
 // ——— 表格列定义 ———
@@ -528,6 +650,43 @@ async function saveKnowledge() {
 			color: 'error',
 			icon: 'mdi-alert-circle',
 		});
+	}
+}
+
+async function downloadCsvTemplate() {
+	try {
+		await businessKnowledgeService.downloadCsvTemplate();
+		$tip('CSV 模板下载成功');
+	} catch {
+		$tip('CSV 模板下载失败', { color: 'error', icon: 'mdi-alert-circle' });
+	}
+}
+
+async function executeCsvImport() {
+	if (!importFile.value) {
+		$tip('请先选择 CSV 文件', { color: 'warning' });
+		return;
+	}
+
+	importLoading.value = true;
+	importResult.value = null;
+	try {
+		importResult.value = await businessKnowledgeService.importCsv(
+			importFile.value,
+			agentId.value,
+		);
+		$tip(
+			`导入完成：成功 ${importResult.value.successCount} 条，失败 ${importResult.value.failCount} 条`,
+			{ color: importResult.value.failCount > 0 ? 'warning' : 'success' },
+		);
+		await loadBusinessKnowledge();
+	} catch {
+		$tip('CSV 导入失败，请检查文件格式', {
+			color: 'error',
+			icon: 'mdi-alert-circle',
+		});
+	} finally {
+		importLoading.value = false;
 	}
 }
 

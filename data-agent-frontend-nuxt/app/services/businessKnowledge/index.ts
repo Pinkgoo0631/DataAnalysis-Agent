@@ -79,6 +79,14 @@ export interface UpdateBusinessKnowledgeDTO {
   agentId: number;
 }
 
+/** CSV 批量导入结果 */
+export interface BatchImportResult {
+  total: number;
+  successCount: number;
+  failCount: number;
+  errors: string[];
+}
+
 const API_BASE_URL = '/api/business-knowledge';
 
 /**
@@ -132,6 +140,49 @@ class BusinessKnowledgeService {
   async create(knowledge: CreateBusinessKnowledgeDTO): Promise<BusinessKnowledgeVO> {
     const response = await axios.post<ApiResponse<BusinessKnowledgeVO>>(API_BASE_URL, knowledge);
     return response.data.data!;
+  }
+
+  /** 通过 CSV 文件批量导入业务知识 */
+  async importCsv(file: File, agentId: number): Promise<BatchImportResult> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('agentId', agentId.toString());
+
+    const response = await axios.post<ApiResponse<BatchImportResult>>(
+      `${API_BASE_URL}/import/csv`,
+      formData,
+      {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      },
+    );
+    if (!response.data.success) {
+      throw new Error(response.data.message || 'CSV 导入失败');
+    }
+    return (
+      response.data.data || {
+        total: 0,
+        successCount: 0,
+        failCount: 0,
+        errors: [],
+      }
+    );
+  }
+
+  /** 下载业务知识 CSV 导入模板 */
+  async downloadCsvTemplate(): Promise<void> {
+    const response = await axios.get(`${API_BASE_URL}/template/csv`, {
+      responseType: 'blob',
+    });
+    const url = window.URL.createObjectURL(
+      new Blob([response.data], { type: 'text/csv' }),
+    );
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'business_knowledge_template.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
   }
 
   /**
@@ -218,4 +269,9 @@ class BusinessKnowledgeService {
 }
 
 export default new BusinessKnowledgeService();
-export type { BusinessKnowledgeVO, CreateBusinessKnowledgeDTO, UpdateBusinessKnowledgeDTO };
+export type {
+  BusinessKnowledgeVO,
+  CreateBusinessKnowledgeDTO,
+  UpdateBusinessKnowledgeDTO,
+  BatchImportResult,
+};
