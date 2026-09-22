@@ -54,7 +54,7 @@ public interface AgentDatasourceTablesMapper {
 	int removeAllTables(@Param("agentDatasourceId") int agentDatasourceId);
 
 	// 插入用户选择的列表
-	@Insert("<script>" + "INSERT IGNORE INTO agent_datasource_tables (agent_datasource_id, table_name) VALUES "
+	@Insert("<script>" + "INSERT INTO agent_datasource_tables (agent_datasource_id, table_name) VALUES "
 			+ "<if test='tables != null and tables.size() > 0'>"
 			+ "<foreach collection='tables' item='table' separator=','>" + "(#{agentDatasourceId}, #{table})"
 			+ "</foreach>" + "</if>" + "</script>")
@@ -65,7 +65,7 @@ public interface AgentDatasourceTablesMapper {
 		if (tables.isEmpty()) {
 			throw new IllegalArgumentException("tables cannot be empty");
 		}
-		int deleteCount = removeExpireTables(agentDatasourceId, tables);
+		int deleteCount = removeAllTables(agentDatasourceId);
 		int insertCount = insertNewTables(agentDatasourceId, tables);
 		return deleteCount + insertCount;
 	}

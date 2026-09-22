@@ -15,6 +15,7 @@
  */
 package com.alibaba.cloud.ai.dataagent.mapper;
 
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mybatis.spring.boot.test.autoconfigure.MybatisTest;
@@ -64,6 +65,16 @@ class AgentDatasourceTablesMapperIntegrationTest {
 				""");
 
 		assertThat(mapper.getSelectedTablesByDatasourceId(3)).containsExactly("orders", "products", "users");
+	}
+
+	@Test
+	void updateAgentDatasourceTables_persistsSelectedTables() {
+		jdbcTemplate.update("INSERT INTO agent_datasource VALUES (1, 10, 3, 1)");
+		jdbcTemplate.update("INSERT INTO agent_datasource_tables VALUES (1, 'legacy')");
+
+		mapper.updateAgentDatasourceTables(1, List.of("orders", "users"));
+
+		assertThat(mapper.getAgentDatasourceTables(1)).containsExactlyInAnyOrder("orders", "users");
 	}
 
 }

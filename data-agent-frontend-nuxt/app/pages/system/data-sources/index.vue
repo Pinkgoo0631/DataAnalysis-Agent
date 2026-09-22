@@ -264,7 +264,7 @@
 
 <script setup lang="ts">
 import datasourceService, { type Datasource } from '@/services/datasource';
-import agentDatasourceService from '@/services/agentDatasource';
+import agentDatasourceService from '@/services/agentDatasource.ts';
 import DatasourceFormDialog from './DatasourceFormDialog.vue';
 import ForeignKeyDialog from './ForeignKeyDialog.vue';
 import ExpandedTableManager from './ExpandedTableManager.vue';
@@ -339,8 +339,12 @@ async function fetchActiveDatasourceForAgent() {
 		return;
 	}
 	try {
-		const res = await agentDatasourceService.getActiveAgentDatasource(agentId.value);
-		activeDatasourceId.value = res.success ? res.data?.datasourceId ?? null : null;
+		const res = await agentDatasourceService.getActiveAgentDatasource(
+			agentId.value,
+		);
+		activeDatasourceId.value = res.success
+			? (res.data?.datasourceId ?? null)
+			: null;
 		if (res.success && res.data?.datasourceId && res.data.selectTables) {
 			selectedTables.value[res.data.datasourceId] = [...res.data.selectTables];
 		}
@@ -385,12 +389,18 @@ async function handleBindDatasource(item: Datasource) {
 	}
 	bindingDatasourceId.value = item.id;
 	try {
-		const res = await agentDatasourceService.addDatasourceToAgent(agentId.value, item.id);
+		const res = await agentDatasourceService.addDatasourceToAgent(
+			agentId.value,
+			item.id,
+		);
 		if (res.success) {
-			activeDatasourceId.value = item.id;
+			await fetchActiveDatasourceForAgent();
 			$tip('已设为当前智能体数据源');
 		} else {
-			$tip(res.message || '绑定失败', { color: 'error', icon: 'mdi-alert-circle' });
+			$tip(res.message || '绑定失败', {
+				color: 'error',
+				icon: 'mdi-alert-circle',
+			});
 		}
 	} catch {
 		$tip('绑定失败', { color: 'error', icon: 'mdi-alert-circle' });
@@ -578,15 +588,29 @@ async function updateTables(item: Datasource) {
 	if (!item.id) return;
 	updatingTablesId.value = item.id;
 	try {
-		const res = await agentDatasourceService.updateDatasourceTables(agentId.value || '', {
-			datasourceId: item.id,
-			tables: selectedTables.value[item.id] ?? [],
-		});
+		const res = await agentDatasourceService.updateDatasourceTables(
+			agentId.value || '',
+			{
+				datasourceId: item.id,
+				tables: selectedTables.value[item.id] ?? [],
+			},
+		);
 		if (res.success) {
+			if (activeDatasourceId.value === item.id)
+				await fetchActiveDatasourceForAgent();
 			$tip(`已保存 ${selectedTables.value[item.id]?.length ?? 0} 个表`);
 		} else {
-			$tip(res.message || '更新失败', { color: 'error', icon: 'mdi-alert-circle' });
+			$tip(res.message || '更新失败', {
+				color: 'error',
+				icon: 'mdi-alert-circle',
+			});
 		}
+	} catch (error: unknown) {
+		const message = error instanceof Error ? error.message : '更新失败';
+		$tip(`更新数据表失败：${message}`, {
+			color: 'error',
+			icon: 'mdi-alert-circle',
+		});
 	} finally {
 		updatingTablesId.value = null;
 	}

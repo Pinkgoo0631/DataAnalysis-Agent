@@ -125,12 +125,15 @@ class AgentDatasourceServiceImplTest {
 		AgentDatasource existing = new AgentDatasource();
 		existing.setId(10);
 		AgentDatasource updated = new AgentDatasource();
+		updated.setId(10);
 		when(agentDatasourceMapper.selectByAgentIdAndDatasourceId(1L, 1)).thenReturn(existing, updated);
+		when(tablesMapper.getAgentDatasourceTables(10)).thenReturn(List.of("t1"));
 
 		AgentDatasource result = service.addDatasourceToAgent(1L, 1);
 		assertNotNull(result);
+		assertEquals(List.of("t1"), result.getSelectTables());
 		verify(agentDatasourceMapper).enableRelation(1L, 1);
-		verify(tablesMapper).removeAllTables(10);
+		verify(tablesMapper, never()).removeAllTables(10);
 	}
 
 	@Test
@@ -179,6 +182,7 @@ class AgentDatasourceServiceImplTest {
 		AgentDatasource ad = new AgentDatasource();
 		ad.setId(10);
 		when(agentDatasourceMapper.selectByAgentIdAndDatasourceId(1L, 1)).thenReturn(ad);
+		when(tablesMapper.getAgentDatasourceTables(10)).thenReturn(List.of("t1", "t2"));
 
 		service.updateDatasourceTables(1L, 1, List.of("t1", "t2"));
 		verify(tablesMapper).updateAgentDatasourceTables(10, List.of("t1", "t2"));
@@ -189,9 +193,21 @@ class AgentDatasourceServiceImplTest {
 		AgentDatasource ad = new AgentDatasource();
 		ad.setId(10);
 		when(agentDatasourceMapper.selectByAgentIdAndDatasourceId(1L, 1)).thenReturn(ad);
+		when(tablesMapper.getAgentDatasourceTables(10)).thenReturn(List.of());
 
 		service.updateDatasourceTables(1L, 1, List.of());
 		verify(tablesMapper).removeAllTables(10);
+	}
+
+	@Test
+	void testUpdateDatasourceTables_incompletePersistenceFails() {
+		AgentDatasource ad = new AgentDatasource();
+		ad.setId(10);
+		when(agentDatasourceMapper.selectByAgentIdAndDatasourceId(1L, 1)).thenReturn(ad);
+		when(tablesMapper.getAgentDatasourceTables(10)).thenReturn(List.of());
+
+		assertThrows(IllegalStateException.class,
+				() -> service.updateDatasourceTables(1L, 1, List.of("t1", "t2")));
 	}
 
 	@Test

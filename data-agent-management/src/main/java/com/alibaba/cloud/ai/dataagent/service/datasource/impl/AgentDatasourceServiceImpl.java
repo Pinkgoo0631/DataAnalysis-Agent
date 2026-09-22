@@ -26,6 +26,7 @@ import com.alibaba.cloud.ai.dataagent.service.datasource.DatasourceService;
 import com.alibaba.cloud.ai.dataagent.service.schema.SchemaService;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -120,11 +121,10 @@ public class AgentDatasourceServiceImpl implements AgentDatasourceService {
 			// If it exists, activate the association
 			agentDatasourceMapper.enableRelation(agentId, datasourceId);
 
-			// 删除已有的表
-			tablesMapper.removeAllTables(existing.getId());
-
 			// Query and return the updated association
 			result = agentDatasourceMapper.selectByAgentIdAndDatasourceId(agentId, datasourceId);
+			List<String> selectedTables = tablesMapper.getAgentDatasourceTables(existing.getId());
+			result.setSelectTables(Optional.ofNullable(selectedTables).orElse(List.of()));
 		}
 		else {
 			// If it does not exist, create a new association
@@ -132,8 +132,8 @@ public class AgentDatasourceServiceImpl implements AgentDatasourceService {
 			agentDatasource.setIsActive(1);
 			agentDatasourceMapper.createNewRelationEnabled(agentId, datasourceId);
 			result = agentDatasource;
+			result.setSelectTables(List.of());
 		}
-		result.setSelectTables(List.of());
 		return result;
 	}
 
@@ -178,6 +178,11 @@ public class AgentDatasourceServiceImpl implements AgentDatasourceService {
 		}
 		else {
 			tablesMapper.updateAgentDatasourceTables(datasource.getId(), tables);
+		}
+
+		List<String> persistedTables = tablesMapper.getAgentDatasourceTables(datasource.getId());
+		if (!Set.copyOf(persistedTables).equals(Set.copyOf(tables))) {
+			throw new IllegalStateException("数据表选择未完整保存，请重试");
 		}
 	}
 
